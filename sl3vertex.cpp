@@ -32,6 +32,6 @@ void VertexSL3::oplusImpl(const double *update)
 	if (++_numOplusCalls > orthogonalizeAfter)
 	{
 		_numOplusCalls = 0;
-		_estimate._mat = _estimate._mat / _estimate._mat.determinant();
+		_estimate.regularize();
 	}
 }

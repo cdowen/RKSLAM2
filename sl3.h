@@ -20,11 +20,16 @@ public:
 		base[5] << 0, 0, 0, 0, -1, 0, 0, 0, 1;
 		base[6] << 0, 0, 0, 0, 0, 0, 1, 0, 0;
 		base[7] << 0, 0, 0, 0, 0, 0, 0, 1, 0;
+		for (int i = 0; i < 8; i++)
+		{
+			memcpy(fullBase.data() + i * 9, base[i].data(), sizeof(double) * 9);
+		}
 	}
 	SL3 operator * (const SL3& tr2) const
 	{
 		SL3 result(*this);
 		result._mat *= tr2._mat;
+		result.regularize();
 		return result;
 	}
 
@@ -36,29 +41,26 @@ public:
 			tmp += v[i] * base[i];
 		}
 		this->_mat = tmp.exp();
+		regularize();
 	}
 
-	//TODO: test if Eigen map can point its memory to correct place
+	void inline regularize()
+	{
+		this->_mat = this->_mat / pow(this->_mat.determinant(), 1.0/3);
+	}
+
+	
 	Vector8d toVector() const{
 		Vector8d ret;
 		Eigen::Matrix3d tmp;
 		tmp = this->_mat.log();
-		std::vector<Eigen::Map<ColVector9d> > Avec;
-		for (int i = 0; i < 8; i++)
-		{
-			Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> tmpM(base[i]);
-			Eigen::Map<ColVector9d> tmpCol(tmpM.data(), tmpM.size());
-			Avec.push_back(tmpCol);
-		}
-		Eigen::Matrix<double, 9, 8> tmpA;
-		tmpA << Avec[0], Avec[1], Avec[2], Avec[3], Avec[4], Avec[5], Avec[6], Avec[7];
-		Eigen::Map<ColVector9d> tmpb(tmp.data(), tmp.size());
-		ret = tmpA.jacobiSvd(Eigen::ComputeFullU|Eigen::ComputeFullV).solve(tmpb);
+		ColVector9d tmpb(tmp.data()); //as is the col-major order, works fine.
+		ret = fullBase.jacobiSvd(Eigen::ComputeFullU|Eigen::ComputeFullV).solve(tmpb);
 		return ret;
 	}
 		
 	Eigen::Matrix3d _mat;
 	std::vector<Eigen::Matrix3d> base;
-	
+	Eigen::Matrix<double, 9, 8> fullBase;
 	
 };

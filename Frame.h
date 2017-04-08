@@ -5,5 +5,8 @@ class Frame
 {
 public:
 	cv::Mat image;
+	std::vector<cv::KeyPoint>keypoints;
+	int Fast_threshold=40;
+
 };
 #endif

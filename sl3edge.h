@@ -3,7 +3,7 @@
 #include <opencv2/opencv.hpp>
 
 class VertexSL3;
-class EdgeSL3 :public g2o::BaseUnaryEdge < 1, unsigned char, VertexSL3 >
+class EdgeSL3 :public g2o::BaseUnaryEdge < 1, int16_t, VertexSL3 >
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -13,7 +13,8 @@ public:
 	//TODO: 处理投影到图像外的点
 	Eigen::Vector3d homo_project();
 	void computeError();
-	void linearOplus();
+	void linearizeOplus();
 	virtual bool read(std::istream&);
 	virtual bool write(std::ostream&) const;
+	bool isValid = true;
 };

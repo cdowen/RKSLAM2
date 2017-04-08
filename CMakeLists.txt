@@ -1,7 +1,7 @@
 cmake_minimum_required( VERSION 2.8 )
 project( rkslam2 )
 set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}  ${CMAKE_SOURCE_DIR}/cmake_modules/ )
-add_compile_options(-std=c++11)
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 find_package(OpenCV REQUIRED)
 find_package(G2O REQUIRED)
@@ -25,15 +25,25 @@ if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
 target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
 ${G2O_CORE_LIBRARY_DEBUG}
 ${G2O_SOLVER_EIGEN_DEBUG}
-${G2O_SOLVER_CSPARSE_DEBUG}
 ${G2O_STUFF_LIBRARY_DEBUG}
 )
-else()
+elseif(CMAKE_BUILD_TYPE EQUAL "RELEASE")
 target_link_libraries(rkslam2 ${OpenCV_LIBRARIES} 
 ${G2O_CORE_LIBRARY}
 ${G2O_SOLVER_EIGEN}
-${G2O_SOLVER_CSPARSE}
 ${G2O_STUFF_LIBRARY}
 )
+elseif (WIN32)
+target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
+${G2O_CORE_LIBRARY_DEBUG}
+${G2O_SOLVER_EIGEN_DEBUG}
+${G2O_STUFF_LIBRARY_DEBUG}
+)
+else()
+target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
+${G2O_CORE_LIBRARY}
+${G2O_SOLVER_EIGEN}
+${G2O_STUFF_LIBRARY}
 endif()
+
 
