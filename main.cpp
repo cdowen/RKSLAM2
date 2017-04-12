@@ -1,6 +1,7 @@
 #include "tracking.h"
 #include <opencv2/opencv.hpp>
 #include "matcher.h"
+#include <stdio.h>
 
 bool testSL3();
 
@@ -13,14 +14,13 @@ int main()
 	im2 = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
 	fr1->image = im1;
 	fr2->image = im2;
-	tracking tr;
-	//testSL3();
+	Tracking tr;
+
 	auto a = tr.ComputeHGlobalSBI(fr1, fr2);
-	std::cout<<a;
 
 	cv::FAST(fr1->image, fr1->keypoints, fr1->Fast_threshold);
 	cv::FAST(fr2->image, fr2->keypoints, fr2->Fast_threshold);
-	matcher Match;
+	Matcher Match;
 	std::vector<cv::KeyPoint> kp1, kp2;
 	std::vector<cv::DMatch> dm;
 	int match_num = Match.SearchForInitialization(fr1, fr2, 4);

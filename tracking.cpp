@@ -8,14 +8,15 @@
 #include <g2o/core/sparse_optimizer_terminate_action.h>
 #include "sl3vertex.h"
 #include "sl3edge.h"
+#include "Map.h"
 #include <opencv2/core/eigen.hpp>
 #include <math.h>
 
 typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
 const float thHuber2D = sqrt(5.99);// from ORBSLAM
 const int numIterations = 100;
-// 计算将fr1中的点通过单应矩阵变换到fr2的矩阵
-cv::Mat tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
+// compute homography that transform a point in fr1 to corresponding location in fr2.
+cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
 	im1 = fr1->image; im2 = fr2->image;
@@ -24,8 +25,6 @@ cv::Mat tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	cv::resize(im2, im2, cv::Size(40, 30));
 	cv::GaussianBlur(im2, im2, cv::Size(0, 0), 0.75);
 
-	//cv::imwrite("sbi1.png", im1);
-	//cv::imwrite("sbi2.png", im2);
 	Sobel(im2, xgradient, CV_32FC1, 1, 0);
 	Sobel(im2, ygradient, CV_32FC1, 0, 1);
 	xgradient = xgradient / 4.0;
@@ -77,8 +76,6 @@ cv::Mat tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
-	//std::cout<<reinterpret_cast<VertexSL3*> (optimizer.vertex(0))->read();
-	//optimizer.vertex(0)->write(std::cout);    
 	optimizer.setVerbose(true);
 	solver->setWriteDebug(true);
 	optimizer.initializeOptimization();
@@ -105,4 +102,27 @@ cv::Mat tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		std::cout << "Valid edge count:" << validCount << "\n";
 	//}
 	return result;
+}
+
+// TODO: wait for forestfLynn
+std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
+{
+	std::map<KeyFrame*, int> overlappingData;
+	Map* globalMap = Map::instance;
+	for (int i = 0; i < globalMap->allKeyFrame.size(); i++)
+	{
+		KeyFrame* kf = globalMap->allKeyFrame[i];
+		for (int j = 0; j < kf->keypoints.size(); j++)
+		{
+			for (int k = 0; k < lastFrame->keypoints.size(); k++)
+			{
+
+			}
+		}
+	}
+}
+
+cv::Mat Tracking::ComputeHGlobalKF()
+{
+
 }

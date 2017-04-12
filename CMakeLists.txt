@@ -19,8 +19,9 @@ tracking.cpp
 sl3.cpp
 sl3vertex.cpp
 sl3edge.cpp
-matcher.cc
+matcher.cpp
 testsl3.cpp
+map.cpp
 )
 
 if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
