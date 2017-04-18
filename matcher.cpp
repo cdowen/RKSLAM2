@@ -44,10 +44,14 @@ int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint k
 
 int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH)
 {
-	for (int i = 0; i < globalH.size(); i++)
+	std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> data;
+	for (auto i = globalH.begin();i!=globalH.end(); i++)
 	{
-
+		auto tmpd = matchByH(i->first, fr1, i->second);
+		data.insert(tmpd.begin(), tmpd.end());
 	}
+	fr1->matchedGroup = data;
+	return data.size();
 }
 
 // Find corresponding feature points in two frames with homography
@@ -64,10 +68,8 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 	{
 		cv::KeyPoint kp = fr1->keypoints[i];
 		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y; kpl(2) = 1;
-		ppl = H*kpl;
-		assert(ppl(2) != 0);
-		ppl = ppl / ppl(2);
 		cv::Mat_<uint8_t> warped(patchHalfSize * 2, patchHalfSize * 2, uint8_t(0));
+		//calculate warped patch.
 		for (int ii = -patchHalfSize; ii < patchHalfSize; ii++)
 		{
 			for (int jj = -patchHalfSize; jj < patchHalfSize; jj++)
@@ -86,11 +88,17 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 		}
 		int min_SSD_error = SSD_error_th;
 		cv::KeyPoint* matchedKp = nullptr;
+		// iterate to find the smallest error in fr2.
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
-			cv::Point2f pt2 = fr2->keypoints[j].pt;		
+			cv::Point2f pt2 = fr2->keypoints[j].pt;
 			if (abs(ppl(0) - pt2.x)<globalSearchHalfLength&&abs(ppl(1)-pt2.y)<globalSearchHalfLength)
 			{
+				int u = pt2.y-patchHalfSize;int d = pt2.y+patchHalfSize;int l = pt2.x-patchHalfSize;int r = pt2.x+patchHalfSize;
+				if (u<0||d>=height||l<0||r>=width)
+				{
+					continue;
+				}
 				cv::Mat patch = fr2->image.rowRange(pt2.y - patchHalfSize, pt2.y + patchHalfSize).colRange(pt2.x - patchHalfSize, pt2.x + patchHalfSize);
 				cv::Mat differ = (warped - patch)&(warped != 0);
 				int ssdError = differ.dot(differ);
@@ -107,6 +115,7 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 			ret.insert(std::make_pair(&kp, p));
 		}
 	}
+	return ret;
 }
 
 inline cv::Mat warpPoint(cv::Mat_<double> point, cv::Mat H)

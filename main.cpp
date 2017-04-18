@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 bool testSL3();
+void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H);
 
 int main()
 {
@@ -14,12 +15,13 @@ int main()
 	im2 = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
 	fr1->image = im1;
 	fr2->image = im2;
+	cv::FAST(fr1->image, fr1->keypoints, fr1->Fast_threshold);
+	cv::FAST(fr2->image, fr2->keypoints, fr2->Fast_threshold);
 	Tracking tr;
 
 	auto a = tr.ComputeHGlobalSBI(fr1, fr2);
 
-	cv::FAST(fr1->image, fr1->keypoints, fr1->Fast_threshold);
-	cv::FAST(fr2->image, fr2->keypoints, fr2->Fast_threshold);
+	testMatchByH(fr2, fr1, a);
 	Matcher Match;
 	std::vector<cv::KeyPoint> kp1, kp2;
 	std::vector<cv::DMatch> dm;
@@ -38,11 +40,8 @@ int main()
 	cv::Mat out;
 	cv::drawMatches(im1, kp1, im2, kp2, dm, out);
 	imshow("matches", out);
-	std::cout << match_num;
+	std::cout << "match by direct alignment:"<<match_num<<"\n";
 	cv::waitKey(0);
-
-
-	getchar();
 
 
 }

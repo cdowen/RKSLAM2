@@ -16,6 +16,8 @@ typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
 const float thHuber2D = sqrt(5.99);// from ORBSLAM
 const int numIterations = 100;
 // compute homography that transform a point in fr1 to corresponding location in fr2.
+//  xfr2 = H*xfr1
+// TODO:calculate image gradients with interpolation
 cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
