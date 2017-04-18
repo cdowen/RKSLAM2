@@ -122,32 +122,5 @@ inline cv::Mat warpPoint(cv::Mat_<double> point, cv::Mat H)
 {
 	return H*point / point(2);
 }
-cv::Mat Matcher::warpPatch(Frame* fr1, cv::KeyPoint kp1, cv::Mat H)
-{
-	double width = fr1->image.size().width;
-	double height = fr1->image.size().height;
-	cv::Mat_<double> upleft(2, 1);
-	cv::Mat_<double> downleft(2, 1);
-	cv::Mat_<double> upright(2, 1);
-	cv::Mat_<double> downright(2, 1);
-	int l = kp1.pt.x - patchHalfSize >= 0 ? kp1.pt.x - patchHalfSize : 0;
-	int r = kp1.pt.x + patchHalfSize <= width - 1? kp1.pt.x + patchHalfSize : width-1;
-	int u = kp1.pt.y - patchHalfSize >= 0 ? kp1.pt.y - patchHalfSize : 0;
-	int d = kp1.pt.y + patchHalfSize <= height - 1 ? kp1.pt.y + patchHalfSize : height-1;
 
-	cv::Mat roi = fr1->image.colRange(l, r+1).rowRange(u, d+1);
-	upleft(0) = l; downleft(0) = l; upright(0) = r; downright(0) = r;
-	upleft(1) = u; downleft(1) = d; upright(1) = u; downright(1) = d;
-	upleft(2) = downleft(2) = upright(2) = downright(2) = 1;
-	//transform corner points to predict warped image patch size;
-	upleft = warpPoint(upleft, H); upright = warpPoint(upright, H);
-	downleft = warpPoint(downleft, H); downright = warpPoint(downright, H);
-	double ll = MIN(upleft(0), downleft(0));
-	double rr = MAX(upright(0), downright(0));
-	double uu = MIN(upleft(1), upright(1));
-	double dd = MAX(downleft(1), downright(1));
-	cv::Mat warped(dd - uu, rr - ll, CV_8UC1);
-	cv::warpPerspective(roi, warped, H, cv::Size(rr - ll, dd - uu));
-	return warped;
-}
 
