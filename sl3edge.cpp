@@ -49,12 +49,12 @@ Eigen::Vector3d EdgeSL3::homo_project()
 		float ygrd = ygradient->at<float>(hLoc[1], hLoc[0]);
 		_jacobianOplusXi[0] = -xgrd;
 		_jacobianOplusXi[1] = -ygrd;
-		_jacobianOplusXi[2] = -hLoc[1] * xgrd;
-		_jacobianOplusXi[3] = -hLoc[0] * ygrd;
-		_jacobianOplusXi[4] = -hLoc[0] * xgrd + hLoc[1] * ygrd;
-		_jacobianOplusXi[5] = hLoc[0] * xgrd + 2 * hLoc[1] * ygrd;
-		_jacobianOplusXi[6] = hLoc[0] * hLoc[0] * xgrd + hLoc[0] * hLoc[1] * ygrd;
-		_jacobianOplusXi[7] = hLoc[0] * hLoc[1] * xgrd + hLoc[1] * hLoc[1] * ygrd;
+		_jacobianOplusXi[2] = -loc[1] * xgrd;
+		_jacobianOplusXi[3] = -loc[0] * ygrd;
+		_jacobianOplusXi[4] = -loc[0] * xgrd + loc[1] * ygrd;
+		_jacobianOplusXi[5] = loc[0] * xgrd + 2 * loc[1] * ygrd;
+		_jacobianOplusXi[6] = loc[0] * loc[0] * xgrd + loc[0] * loc[1] * ygrd;
+		_jacobianOplusXi[7] = loc[0] * loc[1] * xgrd + loc[1] * loc[1] * ygrd;
 		std::vector<double> debugN;
 		isValid = true;
 		for (int i = 0; i < 8; i++)
