@@ -22,7 +22,7 @@ sl3edge.cpp
 matcher.cpp
 testsl3.cpp
 map.cpp
-)
+ProjectionEdge.cpp)
 
 if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
 target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
