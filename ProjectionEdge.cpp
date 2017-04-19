@@ -31,3 +31,13 @@ void EdgeProjection::linearizeOplus()
 	_jacobianOplusXi(1,6) = -loc[0]*loc[1];
 	_jacobianOplusXi(1,7) = -loc[1]*loc[1];
 }
+
+bool EdgeProjection::write(std::ostream &os) const
+{
+	return os.good();
+}
+
+bool::EdgeProjection::read(std::istream &)
+{
+	return true;
+}

@@ -59,7 +59,9 @@ int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> global
 // TODO: different search range for well and ill conditioned points
 std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 {
+	// kpl:points in fr1.
 	cv::Mat_<double> kpl(3,1);
+	// ppl:points projected to fr2.
 	cv::Mat_<double> ppl(3, 1);
 	std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> ret;
 	int width = fr1->image.size().width;
@@ -68,6 +70,8 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 	{
 		cv::KeyPoint kp = fr1->keypoints[i];
 		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y; kpl(2) = 1;
+		ppl = H*kpl;
+		ppl = ppl/ppl(2);
 		cv::Mat_<uint8_t> warped(patchHalfSize * 2, patchHalfSize * 2, uint8_t(0));
 		//calculate warped patch.
 		for (int ii = -patchHalfSize; ii < patchHalfSize; ii++)
@@ -112,7 +116,7 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 		if (matchedKp != nullptr)
 		{
 			auto p = std::make_pair(static_cast<KeyFrame*>(fr1), matchedKp);
-			ret.insert(std::make_pair(&kp, p));
+			ret.insert(std::make_pair(&(fr1->keypoints[i]), p));
 		}
 	}
 	return ret;

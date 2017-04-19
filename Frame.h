@@ -4,10 +4,13 @@
 #include "MapPoint.h"
 #include <unordered_map>
 
+class KeyFrame;
 class Frame
 {
 public:
 	cv::Mat image;
+	cv::Mat sbiImg;
+
 	unsigned long id;
 	double timestamp;
 	std::vector<cv::KeyPoint> keypoints;
