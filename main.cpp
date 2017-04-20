@@ -2,7 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include "matcher.h"
 #include <stdio.h>
-
+#include "optimization_ceres.h"
 bool testSL3();
 void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H);
 
@@ -25,7 +25,8 @@ int main()
 
 
 	Tracking tr;
-
+	optimization_ceres ops;
+	ops.ComputeHGlobalSBI(fr1, fr2);
 	auto a = tr.ComputeHGlobalSBI(fr1, fr2);
 	// Just for test
 	Matcher Match;
