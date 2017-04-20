@@ -9,7 +9,7 @@ void EdgeProjection::computeError()
 	hLoc = hLoc / hLoc[2];
 	Eigen::Vector2d res;
 	res <<hLoc[0], hLoc[1];
-	_error = _measurement-res;
+	_error = res - _measurement;
 }
 
 void EdgeProjection::linearizeOplus()

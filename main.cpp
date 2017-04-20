@@ -39,14 +39,14 @@ int main()
 	std::vector<cv::DMatch> dm;
 	int match_num = Match.SearchForInitialization(fr1, fr2, 4);
 	int tmpd = 0;
-	for (std::map<int, int>::iterator it = Match.MatchedPoints.begin(); it != Match.MatchedPoints.end(); ++it)
+	for (auto it = fr2->matchedGroup.begin(); it != fr2->matchedGroup.end(); ++it)
 	{
 		cv::DMatch tmp;
 		tmp.imgIdx = 0;
 		tmp.trainIdx = tmp.queryIdx = tmpd;
 		dm.push_back(tmp);
-		kp1.push_back(fr1->keypoints[it->first]);
-		kp2.push_back(fr2->keypoints[it->second]);
+		kp1.push_back(*it->second.second);
+		kp2.push_back(*it->first);
 		tmpd++;
 	}
 	cv::Mat out;
