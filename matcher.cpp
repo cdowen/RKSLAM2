@@ -119,6 +119,7 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 			ret.insert(std::make_pair(&(fr1->keypoints[i]), p));
 		}
 	}
+	std::cout<<"match by Homography:"<<ret.size()<<"\n";
 	return ret;
 }
 

@@ -6,6 +6,7 @@
 #include "sl3.h"
 #include <ceres/ceres.h>
 #include <opencv2/opencv.hpp>
+
 bool validateProjection(Eigen::Vector3d hLoc, cv::Size s);
 
 void optimization_ceres::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
@@ -17,7 +18,7 @@ void optimization_ceres::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 		cv::Mat* image;
 		cv::Mat* xgrad, *ygrad;
 		Eigen::Vector2i loc;
-		uchar measurement;
+		double measurement;
 		virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobians)const
 		{
 			Vector8d param(parameters[0]);
@@ -60,6 +61,7 @@ void optimization_ceres::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 					jacobians[0][7] = loc[0] * loc[1] * xgrd + loc[1] * loc[1] * ygrd;
 				}
 			}
+
 			return true;
 		}
 	};
@@ -80,15 +82,23 @@ void optimization_ceres::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 		cf->xgrad = &xgradient;
 		cf->ygrad = &ygradient;
 		cf->image = &im2;
+		cf->measurement = *(im1.data + i);
 		ceres::HuberLoss *loss = new ceres::HuberLoss(0.1);
 		problem.AddResidualBlock(cf, loss, x);
 	}
-		ceres::Solver::Options options;
-		options.minimizer_progress_to_stdout = true;
-		options.linear_solver_type = ceres::LinearSolverType::DENSE_QR;
-		options.max_num_iterations = 10;
-		ceres::Solver::Summary summary;
-		ceres::Solve(options, &problem, &summary);
-	std::cout << summary.BriefReport() << "\n";
-	std::cout << "h : "<<x<<"\n";
+	ceres::Solver::Options options;
+	options.minimizer_progress_to_stdout = true;
+	options.linear_solver_type = ceres::LinearSolverType::DENSE_QR;
+	//options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
+	//options.line_search_direction_type = ceres::LineSearchDirectionType::BFGS;
+	//options.line_search_type = ceres::LineSearchType ::WOLFE;
+	options.max_num_iterations = 10;
+	options.preconditioner_type = ceres::PreconditionerType ::IDENTITY;
+	ceres::Solver::Summary summary;
+	ceres::Solve(options, &problem, &summary);
+	std::cout << summary.FullReport() << "\n";
+	Vector8d result(x);
+	SL3 r;
+	r.fromVector(result);
+	std::cout << "h : "<<r._mat<<"\n";
 }
