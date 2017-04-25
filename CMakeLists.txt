@@ -23,6 +23,7 @@ matcher.cpp
 testsl3.cpp
 map.cpp
 Initialization.cpp
+ProjectionEdge.cpp
 )
 
 if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
@@ -50,5 +51,3 @@ ${G2O_SOLVER_EIGEN}
 ${G2O_STUFF_LIBRARY}
 )
 endif()
-
-

@@ -9,21 +9,22 @@
 #include "sl3vertex.h"
 #include "sl3edge.h"
 #include "Map.h"
+#include "ProjectionEdge.h"
 #include <opencv2/core/eigen.hpp>
 #include <math.h>
 
 typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
 const float thHuber2D = sqrt(5.99);// from ORBSLAM
+const float thHuberDeltaI = 0.1;
+const float thHuberDeltaX = 10;
 const int numIterations = 100;
 // compute homography that transform a point in fr1 to corresponding location in fr2.
+//  xfr2 = H*xfr1, consider fr1 as keyframe
+// TODO:calculate image gradients with interpolation
 cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
-	im1 = fr1->image; im2 = fr2->image;
-	cv::resize(im1, im1, cv::Size(40, 30));
-	cv::GaussianBlur(im1, im1, cv::Size(0, 0), 0.75);
-	cv::resize(im2, im2, cv::Size(40, 30));
-	cv::GaussianBlur(im2, im2, cv::Size(0, 0), 0.75);
+	im1 = fr1->sbiImg; im2 = fr2->sbiImg;
 
 	Sobel(im2, xgradient, CV_32FC1, 1, 0);
 	Sobel(im2, ygradient, CV_32FC1, 0, 1);
@@ -43,30 +44,22 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
 	action->setGainThreshold(0.00001);
-	action->setMaxIterations(50);
+	action->setMaxIterations(10);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
 	vSL3->setEstimate(SL3());
-	SL3 d;
-	
-	d._mat << 1, 0, 0,
-		0, 1, 0,
-		0, 0, 1;
-		
-	vSL3->setEstimate(d);
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
 	for (int i = 0; i < im1.size().height*im1.size().width; i++)
 	{
 		EdgeSL3* e = new EdgeSL3();
-		e->setId(i);
 		e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
 		e->setMeasurement(*(im1.data + i));
 		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
 		e->setRobustKernel(rk);
-		rk->setDelta(thHuber2D);
+		rk->setDelta(thHuberDeltaI);
 
 		e->loc[0] = i%im1.size().width;
 		e->loc[1] = i/im1.size().width;
@@ -122,7 +115,85 @@ std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
 	}
 }
 
-cv::Mat Tracking::ComputeHGlobalKF()
+cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 {
+	cv::Mat im1 = kf->sbiImg;
+	cv::Mat im2 = fr2->sbiImg;
+	cv::Mat xgradient, ygradient;
+	Sobel(im2, xgradient, CV_32FC1, 1, 0);
+	Sobel(im2, ygradient, CV_32FC1, 0, 1);
+	xgradient = xgradient / 4.0;
+	ygradient = ygradient / 4.0;
 
+	g2o::SparseOptimizer optimizer;
+	BlockSolver_8_1::LinearSolverType * linearSolver;
+	linearSolver = new g2o::LinearSolverDense<BlockSolver_8_1::PoseMatrixType>();
+
+	BlockSolver_8_1 * solver_ptr = new BlockSolver_8_1(linearSolver);
+
+	g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+	optimizer.setAlgorithm(solver);
+
+	g2o::SparseOptimizerTerminateAction* action;
+	action = new g2o::SparseOptimizerTerminateAction();
+	action->setGainThreshold(0.00001);
+	action->setMaxIterations(10);
+	optimizer.addPostIterationAction(action);
+
+	VertexSL3* vSL3 = new VertexSL3();
+	vSL3->setEstimate(SL3());
+	vSL3->setId(0);
+	optimizer.addVertex(vSL3);
+
+	for (int i = 0; i < im1.size().height*im1.size().width; i++)
+	{
+		EdgeSL3* e = new EdgeSL3();
+		e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
+		e->setMeasurement(*(im1.data + i));
+		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+		rk->setDelta(thHuberDeltaI);
+		e->setRobustKernel(rk);
+
+		e->loc[0] = i%im1.size().width;
+		e->loc[1] = i/im1.size().width;
+		e->image = &im2;
+		e->xgradient = &xgradient;
+		e->ygradient = &ygradient;
+		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+		//optimizer.addEdge(e);
+	}
+
+	for (auto it = fr2->matchedGroup.begin();it!=fr2->matchedGroup.end();it++)
+	{
+		if (it->second.first!=kf)
+		{
+			break;
+		}
+		Eigen::Vector2d kpmea;
+		kpmea[0] = it->first->pt.x;
+		kpmea[1] = it->first->pt.y;
+		EdgeProjection* e = new EdgeProjection();
+		e->setVertex(0, optimizer.vertex(0));
+		e->setMeasurement(kpmea);
+		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+		rk->setDelta(thHuberDeltaX);
+		e->setRobustKernel(rk);
+
+		e->loc[0] = it->second.second->pt.x;
+		e->loc[1] = it->second.second->pt.y;
+		e->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
+		optimizer.addEdge(e);
+	}
+
+	optimizer.initializeOptimization();
+	cv::Mat result;
+	optimizer.setVerbose(true);
+	optimizer.optimize(50);
+	SL3 est;
+	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
+	est = sl3d->estimate();
+	cv::eigen2cv(est._mat, result);
+	fr2->keyFrameSet.insert(std::make_pair(kf, result));
+	std::cout << "optimize with keypoint:"<< result << "\n";
 }
+
