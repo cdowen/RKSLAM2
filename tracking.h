@@ -12,5 +12,6 @@ public:
 	std::vector<KeyFrame*> SearchTopOverlapping();
 
 	Frame* currFrame, *lastFrame;
+	cv::Mat mK;
 };
 #endif

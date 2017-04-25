@@ -7,7 +7,7 @@
 class Matcher{
 public:
   Matcher(){};
-  int SearchForInitialization( Frame* fr1, Frame* fr2, int radius=4);
+  int SearchForInitialization( Frame* fr1, Frame* fr2, int radius=15);
   std::map<int,int> MatchedPoints;
   int SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH);
   
