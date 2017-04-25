@@ -24,7 +24,7 @@ int main()
 	Tracking tr; tr.mK=(cv::Mat_<double>(3,3) <<517.3, 0, 318.6, 0, 516.5, 255.3, 0, 0, 1);
 
 	//TODO
-	//auto a = tr.ComputeHGlobalSBI(fr1, fr2);
+	auto a = tr.ComputeHGlobalSBI(fr1, fr2);
 
 	cv::FAST(fr1->image, fr1->keypoints, fr1->Fast_threshold);
 	cv::FAST(fr2->image, fr2->keypoints, fr2->Fast_threshold);
