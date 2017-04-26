@@ -6,11 +6,12 @@ set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
 find_package(OpenCV REQUIRED)
 find_package(G2O REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package (Threads)
 
 
 include_directories(${OpenCV_INCLUDE_DIRS} 
 ${G2O_INCLUDE_DIRS}
-${Eigen3_INCLUDE_DIRS}
+${EIGEN3_INCLUDE_DIR}
 )
 
 add_executable(rkslam2 
@@ -31,12 +32,14 @@ target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
 ${G2O_CORE_LIBRARY_DEBUG}
 ${G2O_SOLVER_EIGEN_DEBUG}
 ${G2O_STUFF_LIBRARY_DEBUG}
+${CMAKE_THREAD_LIBS_INIT}
 )
 elseif(CMAKE_BUILD_TYPE EQUAL "RELEASE")
 target_link_libraries(rkslam2 ${OpenCV_LIBRARIES} 
 ${G2O_CORE_LIBRARY}
 ${G2O_SOLVER_EIGEN}
 ${G2O_STUFF_LIBRARY}
+${CMAKE_THREAD_LIBS_INIT}
 )
 elseif (WIN32)
 target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
@@ -49,5 +52,6 @@ target_link_libraries(rkslam2 ${OpenCV_LIBRARIES}
 ${G2O_CORE_LIBRARY}
 ${G2O_SOLVER_EIGEN}
 ${G2O_STUFF_LIBRARY}
+${CMAKE_THREAD_LIBS_INIT}
 )
 endif()

@@ -160,7 +160,7 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-		//optimizer.addEdge(e);
+		optimizer.addEdge(e);
 	}
 
 	for (auto it = fr2->matchedGroup.begin();it!=fr2->matchedGroup.end();it++)
