@@ -6,7 +6,7 @@ class VertexSL3 :public g2o::BaseVertex<8, SL3>
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-		VertexSL3(){_numOplusCalls=0; }
+		VertexSL3(){_numOplusCalls=0; _estimate = SL3();}
 	static const int orthogonalizeAfter = 1000; 
 	inline virtual void setToOriginImpl()
 	{

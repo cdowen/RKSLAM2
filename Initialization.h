@@ -4,9 +4,10 @@
 #include <opencv2/opencv.hpp>
 #include "matcher.h"
 #include "Frame.h"
-#include "tracking.h"
 
-class Initialization{
+class Tracking;
+class Initialization
+{
 public:
   Initialization(Tracking* tracking, const Frame &ReferenceFrame, int iterations = 200);
   //bool Initialize(const Frame &CurrentFrame, std::map<int,int> MatchedPoints,cv::Mat &R21, cv::Mat &t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated);

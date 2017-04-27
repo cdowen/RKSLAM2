@@ -1,7 +1,7 @@
 #include "Initialization.h"
 #include <thread>
 #include <iostream>
-
+#include "tracking.h"
 std::string type2str(int type) {
   std::string r;
 
@@ -66,7 +66,7 @@ void Initialization::FindHomography(float& score,cv::Mat& H21)
 {
   H21=cv::findHomography(mMatchedKeys1,mMatchedKeys2,CV_RANSAC,3,InlierH);
   score=cv::countNonZero(InlierH);
-  std::cout<<"Homography is: "<<H21<<" type: "<<type2str(H21.type())<<std::endl;
+  //std::cout<<"Homography is: "<<H21<<" type: "<<type2str(H21.type())<<std::endl;
   std::cout<<"The number of the inlier points using FindHomography is: "<<score<<std::endl;
 }
 
@@ -76,9 +76,9 @@ void Initialization::FindEssentialMat(float& score, cv::Mat& E21)
   cv::Mat fundamental_matrix=cv::findFundamentalMat(mMatchedKeys1, mMatchedKeys2, CV_FM_RANSAC, 3., 0.99, InlierE);
   score=cv::countNonZero(InlierE);
   std::cout<<"The number of the inlier points using FindEssentialMat is: "<<score<<std::endl;
-  std::cout<<"fundamental_matrix is: "<<fundamental_matrix<<std::endl;
+  //std::cout<<"fundamental_matrix is: "<<fundamental_matrix<<std::endl;
   E21=mK.t()*fundamental_matrix*mK;
-  std::cout<<"Essential Mat is: "<<E21<<std::endl;
+  //std::cout<<"Essential Mat is: "<<E21<<std::endl;
 }
 
 //Recover pose(R21 t21)  and structure(vP3D vbTriangulated) from Homography.
@@ -204,7 +204,7 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
       std::vector<bool> mvTriangulated;
       double mvparallax;
       int nGood=CheckRT(vR[i], vt[i], InlierH, mvP3D, 4, mvTriangulated, mvparallax);
-      std::cout<<"nGood: "<<nGood<<" points."<<std::endl;
+      //std::cout<<"nGood: "<<nGood<<" points."<<std::endl;
        if(nGood>bestGood)
         {
             secondBestGood = bestGood;
@@ -219,8 +219,8 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
             secondBestGood = nGood;
         }   
     }
-    std::cout<<"best Rt : "<<bestGood<<" points."<<std::endl;
-    std::cout<<"Second Rt "<<secondBestGood<<" points."<<std::endl;
+    //std::cout<<"best Rt : "<<bestGood<<" points."<<std::endl;
+    //std::cout<<"Second Rt "<<secondBestGood<<" points."<<std::endl;
     if(secondBestGood<0.75*bestGood && bestParallax>=minParallax && bestGood>minTriangulated && bestGood>0.9*cv::countNonZero(InlierH))
     {
         vR[bestSolutionIdx].copyTo(R21);
@@ -239,9 +239,9 @@ bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t
  
     cv::Mat R1, R2, t;
     decomposeEssentialMat(EssentialMat, R1, R2, t);
-    std::cout<<"R1="<<R1<<std::endl;
-    std::cout<<"R12="<<R2<<std::endl;
-    std::cout<<"t="<<t<<std::endl;
+    //std::cout<<"R1="<<R1<<std::endl;
+    //std::cout<<"R12="<<R2<<std::endl;
+    //std::cout<<"t="<<t<<std::endl;
     cv::Mat t1=t;
     cv::Mat t2=-t;
     

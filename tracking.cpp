@@ -13,6 +13,114 @@
 #include <opencv2/core/eigen.hpp>
 #include <math.h>
 
+#include <chrono>
+
+Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
+
+void Tracking::Run()
+{
+
+	//Load Images.
+	std::vector<std::string> vstrImageFilenames;
+	std::vector<double> vTimestamps;
+	std::string strFile="/home/user/Datasets/rgbd_dataset_freiburg1_xyz/rgb.txt";
+	LoadImages(strFile,vstrImageFilenames,vTimestamps);
+
+	int nImages=vstrImageFilenames.size();
+
+	for(int ni=0;ni<nImages-1;ni++)
+	{
+		cv::Mat im=cv::imread("/home/user/Datasets/rgbd_dataset_freiburg1_xyz/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
+		double tframe=vTimestamps[ni];
+		Frame* fr = new Frame();
+		cv::resize(im, fr->sbiImg, cv::Size(40, 30));
+		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
+		fr->image = im;
+		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold);
+
+		//Initialize.
+		if(mState==NOT_INITIALIZED)
+		{
+			if(!Initializer)
+			{
+				if(fr->keypoints.size()>=100)
+				{
+					Initializer= new Initialization(this,*fr,2000);
+					FirstFrame=fr;
+					std::cout<<ni<<"th("<<std::setprecision(16)<<tframe<<") image is selected as FirstFrame!\n";
+				}
+			}else
+			{
+				std::cout<<ni<<"th("<<std::setprecision(16)<<tframe<<") image is selected as SecondFrame!\n";
+				if(fr->keypoints.size()<100)
+				{
+					delete Initializer;
+					Initializer= nullptr;
+					continue;
+				}
+
+				Matcher Match;
+
+				std::vector<cv::KeyPoint> kp1, kp2;
+
+				if(Match.SearchForInitialization(FirstFrame, fr, 15)<100)
+				{
+					delete Initializer;
+					Initializer= nullptr;
+					continue;
+				}
+				SecondFrame=fr;
+
+				cv::Mat R21;cv::Mat t21;
+				std::vector<cv::Point3f> vP3D; std::vector <bool> vbTriangulated;
+				if(!Initializer->Initialize(*SecondFrame, Match.MatchedPoints,R21,t21,vP3D,vbTriangulated))
+				{
+					std::cout<<"Failed to Initialize.\n\n";
+				}else
+				{
+					std::cout<<"System Initialized !\n\n";
+					break;
+				}
+			}
+
+
+			if(mState==OK)
+			{
+				//TODO
+				//auto a = tr.ComputeHGlobalSBI(fr1, fr2);
+
+
+				//std::map<KeyFrame*, cv::Mat> vec;
+				//vec.insert(std::make_pair(static_cast<KeyFrame*>(fr1), a));
+				//int match_num_1 = Match.SearchMatchByGlobal(fr2, vec);
+				//auto b = tr.ComputeHGlobalKF(static_cast<KeyFrame*>(fr1), fr2);
+
+
+
+
+				/*int tmpd = 0;
+				 std::vector<cv::DMatch> dm;
+				for (auto it = fr2->matchedGroup.begin(); it != fr2->matchedGroup.end(); ++it)
+				{
+					cv::DMatch tmp;
+					tmp.imgIdx = 0;
+					tmp.trainIdx = tmp.queryIdx = tmpd;
+					dm.push_back(tmp);
+					kp1.push_back(*it->second.second);
+					kp2.push_back(*it->first);
+					tmpd++;
+				}
+				cv::Mat out;
+				cv::drawMatches(im1, kp1, im2, kp2, dm, out);
+				imshow("matches", out);
+				cv::waitKey(0);*/
+
+				//getchar();
+			}
+		}
+	}
+}
+
 typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
 const float thHuber2D = sqrt(5.99);// from ORBSLAM
 const float thHuberDeltaI = 0.1;
@@ -48,7 +156,7 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
-	vSL3->setEstimate(SL3());
+	vSL3->updateCache();
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
@@ -197,3 +305,31 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	std::cout << "optimize with keypoint:"<< result << "\n";
 }
 
+void Tracking::LoadImages(const std::string &strFile, std::vector<std::string> &vstrImageFilenames, std::vector<double> &vTimestamps)
+{
+	std::ifstream f;
+	f.open(strFile.c_str());
+
+	// skip first three lines
+	std::string s0;
+	std::getline(f,s0);
+	std::getline(f,s0);
+	std::getline(f,s0);
+
+	while(!f.eof())
+	{
+		std::string s;
+		getline(f,s);
+		if(!s.empty())
+		{
+			std::stringstream ss;
+			ss << s;
+			double t;
+			std::string sRGB;
+			ss >> t;
+			vTimestamps.push_back(t);
+			ss >> sRGB;
+			vstrImageFilenames.push_back(sRGB);
+		}
+	}
+}
