@@ -11,7 +11,7 @@ find_package(Ceres REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS} 
 ${G2O_INCLUDE_DIRS}
 ${Eigen3_INCLUDE_DIRS}
-        ${CERES_INCLUDE_DIRS}
+${CERES_INCLUDE_DIRS}
 )
 
 add_executable(rkslam2 
