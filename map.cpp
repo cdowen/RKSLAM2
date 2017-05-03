@@ -1,6 +1,18 @@
 #include "Map.h"
 Map* Map::instance;
-Map::Map()
+
+Map* Map::getInstance()
 {
-	Map::instance = this;
+	if (Map::instance == nullptr)
+	{
+		Map::instance = new Map();
+	}
+	return Map::instance;
+}
+bool Map::addKeyFrame(KeyFrame *kf)
+{
+	if (kf!= nullptr)
+	{
+		allKeyFrame.push_back(kf);
+	}
 }

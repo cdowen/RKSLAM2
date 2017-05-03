@@ -6,6 +6,9 @@
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/core/sparse_optimizer_terminate_action.h>
+#include <g2o/solvers/csparse/linear_solver_csparse.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/types/sba/types_six_dof_expmap.h>
 #include "sl3vertex.h"
 #include "sl3edge.h"
 #include "Map.h"
@@ -14,30 +17,34 @@
 #include <math.h>
 
 #include <chrono>
+#include <g2o/types/slam3d/se3quat.h>
 
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
 
-void Tracking::Run()
+void Tracking::Run(std::string pathtoData)
 {
 
 	//Load Images.
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
-	std::string strFile="/home/user/Datasets/rgbd_dataset_freiburg1_xyz/rgb.txt";
+	std::string strFile=pathtoData+"/rgb.txt";
 	LoadImages(strFile,vstrImageFilenames,vTimestamps);
 
 	int nImages=vstrImageFilenames.size();
 
 	for(int ni=0;ni<nImages-1;ni++)
 	{
-		cv::Mat im=cv::imread("/home/user/Datasets/rgbd_dataset_freiburg1_xyz/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
+		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
 		Frame* fr = new Frame();
 		cv::resize(im, fr->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
 		fr->image = im;
 		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold);
+		fr->mappoints.reserve(fr->keypoints.size());
+		std::fill(fr->mappoints.begin(), fr->mappoints.end(), nullptr);
 
+		currFrame = fr;
 		//Initialize.
 		if(mState==NOT_INITIALIZED)
 		{
@@ -49,7 +56,8 @@ void Tracking::Run()
 					FirstFrame=fr;
 					std::cout<<ni<<"th("<<std::setprecision(16)<<tframe<<") image is selected as FirstFrame!\n";
 				}
-			}else
+			}
+			else
 			{
 				std::cout<<ni<<"th("<<std::setprecision(16)<<tframe<<") image is selected as SecondFrame!\n";
 				if(fr->keypoints.size()<100)
@@ -70,24 +78,46 @@ void Tracking::Run()
 					continue;
 				}
 				SecondFrame=fr;
-
+				KeyFrame* debug_kf = static_cast<KeyFrame*>(currFrame);
+				assert(debug_kf->sbiImg.size().height ==30&&debug_kf->sbiImg.size().width == 40);
 				cv::Mat R21;cv::Mat t21;
 				std::vector<cv::Point3f> vP3D; std::vector <bool> vbTriangulated;
 				if(!Initializer->Initialize(*SecondFrame, Match.MatchedPoints,R21,t21,vP3D,vbTriangulated))
 				{
 					std::cout<<"Failed to Initialize.\n\n";
-				}else
+				}
+				else
 				{
 					std::cout<<"System Initialized !\n\n";
-					break;
+					// store points in keyframe
+					Map* map = Map::getInstance();
+					for (int i = 0;i<vP3D.size();i++)
+					{
+						if (vbTriangulated[i])
+						{
+							MapPoint* mp = new MapPoint;
+							mp->Tw(0) = vP3D[i].x;
+							mp->Tw(1) = vP3D[i].y;
+							mp->Tw(2) = vP3D[i].z;
+							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), &FirstFrame->keypoints[i]));
+							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame*>(SecondFrame), &SecondFrame->keypoints[Match.MatchedPoints[i]]));
+							FirstFrame->mappoints[i] = mp;
+							SecondFrame->mappoints[Match.MatchedPoints[i]] = mp;
+							map->allMapPoint.push_back(mp);
+						}
+					}
+					map->allKeyFrame.push_back(static_cast<KeyFrame*>(FirstFrame));
+					map->allKeyFrame.push_back(static_cast<KeyFrame*>(SecondFrame));
+					mState = OK;
+					//break;
 				}
 			}
-
-
+			// TODO: assign value to lastFrame
 			if(mState==OK)
 			{
-				//TODO
-				//auto a = tr.ComputeHGlobalSBI(fr1, fr2);
+				Map* map = Map::getInstance();
+				auto kf = map->allKeyFrame.back();
+				auto a = ComputeHGlobalSBI(lastFrame, currFrame);
 
 
 				//std::map<KeyFrame*, cv::Mat> vec;
@@ -122,7 +152,7 @@ void Tracking::Run()
 }
 
 typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
-const float thHuber2D = sqrt(5.99);// from ORBSLAM
+constexpr float thHuber2D = sqrt(5.99);// from ORBSLAM
 const float thHuberDeltaI = 0.1;
 const float thHuberDeltaX = 10;
 const int numIterations = 100;
@@ -205,22 +235,40 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	return result;
 }
 
-// TODO: wait for forestfLynn
+// search for x most overlapping keyframe with last frame.
 std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
 {
-	std::map<KeyFrame*, int> overlappingData;
-	Map* globalMap = Map::instance;
-	for (int i = 0; i < globalMap->allKeyFrame.size(); i++)
+	const int MAX_KEYFRAME_COUNT = 5;
+	std::map<KeyFrame*, int> kfv;
+	for (auto mit = lastFrame->matchedGroup.begin();mit!=lastFrame->matchedGroup.end();mit++)
 	{
-		KeyFrame* kf = globalMap->allKeyFrame[i];
-		for (int j = 0; j < kf->keypoints.size(); j++)
+		std::map<KeyFrame *, int>::iterator it = kfv.find(mit->first);
+		if (it != kfv.end())
 		{
-			for (int k = 0; k < lastFrame->keypoints.size(); k++)
-			{
-
-			}
+			it->second++;
+		}
+		else
+		{
+			kfv.insert(std::make_pair(mit->first, 0));
 		}
 	}
+	std::vector<KeyFrame*> kfs;
+	for (int i = 0;i<MAX_KEYFRAME_COUNT;i++)
+	{
+		int max_v = 0;
+		KeyFrame* max_kf = nullptr;
+		for (std::map<KeyFrame*, int>::iterator it = kfv.begin();it!=kfv.end();it++)
+		{
+			if (it->second>max_v)
+			{
+				max_v = it->second;
+				max_kf = it->first;
+			}
+		}
+		kfs.push_back(max_kf);
+		kfv.erase(max_kf);
+	}
+	return kfs;
 }
 
 cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
@@ -273,13 +321,13 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 
 	for (auto it = fr2->matchedGroup.begin();it!=fr2->matchedGroup.end();it++)
 	{
-		if (it->second.first!=kf)
+		if (it->first!=kf)
 		{
 			break;
 		}
 		Eigen::Vector2d kpmea;
-		kpmea[0] = it->first->pt.x;
-		kpmea[1] = it->first->pt.y;
+		kpmea[0] = it->second.first->pt.x;
+		kpmea[1] = it->second.first->pt.y;
 		EdgeProjection* e = new EdgeProjection();
 		e->setVertex(0, optimizer.vertex(0));
 		e->setMeasurement(kpmea);
@@ -303,6 +351,65 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	cv::eigen2cv(est._mat, result);
 	fr2->keyFrameSet.insert(std::make_pair(kf, result));
 	std::cout << "optimize with keypoint:"<< result << "\n";
+}
+
+cv::Mat Tracking::PoseEstimation(Frame* fr)
+{
+	typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;
+	Block::LinearSolverType* linearSolver = new g2o::LinearSolverCSparse<Block::PoseMatrixType>();
+	Block* solver_ptr = new Block ( linearSolver );
+	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( solver_ptr );
+	g2o::SparseOptimizer optimizer;
+	optimizer.setAlgorithm ( solver );
+
+	// vertex
+	g2o::VertexSE3Expmap* pose = new g2o::VertexSE3Expmap(); // camera pose
+	pose->setEstimate ( g2o::SE3Quat ());
+	optimizer.addVertex ( pose );
+
+	int index = 1;
+	for ( const MapPoint* mp : fr->mappoints)   // landmarks
+	{
+		if (mp== nullptr)
+		{
+			continue;
+		}
+		g2o::VertexSBAPointXYZ* point = new g2o::VertexSBAPointXYZ();
+		point->setId ( index++ );
+		point->setEstimate ( Eigen::Vector3d ( mp->Tw(0), mp->Tw(1), mp->Tw(2) ) );
+		point->setMarginalized ( true );
+		optimizer.addVertex ( point );
+	}
+	// parameter: camera intrinsics
+	g2o::CameraParameters* camera = new g2o::CameraParameters (
+			mK.at<double> ( 0,0 ), Eigen::Vector2d ( mK.at<double> ( 0,2 ), mK.at<double> ( 1,2 ) ), 0
+	);
+	camera->setId ( 0 );
+	optimizer.addParameter ( camera );
+
+	// edges
+	index = 1;
+	for ( int i = 0;i<fr->keypoints.size();i++)
+	{
+		if (fr->mappoints[i]== nullptr)
+		{
+			continue;
+		}
+		g2o::EdgeProjectXYZ2UV* edge = new g2o::EdgeProjectXYZ2UV();
+		edge->setId ( index );
+		edge->setVertex ( 0, dynamic_cast<g2o::VertexSBAPointXYZ*> ( optimizer.vertex ( index ) ) );
+		edge->setVertex ( 1, pose );
+		edge->setMeasurement ( Eigen::Vector2d ( fr->keypoints[i].pt.x, fr->keypoints[i].pt.y ) );
+		edge->setParameterId ( 0,0 );
+		edge->setInformation ( Eigen::Matrix2d::Identity() );
+		optimizer.addEdge ( edge );
+		index++;
+	}
+
+	optimizer.setVerbose ( true );
+	optimizer.initializeOptimization();
+	optimizer.optimize(10);
+	std::cout<<"T="<<std::endl<<Eigen::Isometry3d ( pose->estimate() ).matrix() <<std::endl;
 }
 
 void Tracking::LoadImages(const std::string &strFile, std::vector<std::string> &vstrImageFilenames, std::vector<double> &vTimestamps)

@@ -132,7 +132,7 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
         Rp.at<double>(2,0)=stheta[i];
         Rp.at<double>(2,2)=ctheta;
 
-	cv::Mat R = s*U*Rp*Vt;
+	    cv::Mat R = s*U*Rp*Vt;
         vR.push_back(R);
 
         cv::Mat tp(3,1,CV_64F);

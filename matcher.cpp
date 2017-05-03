@@ -44,7 +44,7 @@ int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint k
 
 int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH)
 {
-	std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> data;
+	std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> data;
 	for (auto i = globalH.begin();i!=globalH.end(); i++)
 	{
 		auto tmpd = matchByH(i->first, fr1, i->second);
@@ -57,13 +57,13 @@ int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> global
 // Find corresponding feature points in two frames with homography
 // fr1 represent keyframe to project.
 // TODO: different search range for well and ill conditioned points
-std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
+std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 {
 	// kpl:points in fr1.
 	cv::Mat_<double> kpl(3,1);
 	// ppl:points projected to fr2.
 	cv::Mat_<double> ppl(3, 1);
-	std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> ret;
+	std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> ret;
 	int width = fr1->image.size().width;
 	int height = fr1->image.size().height;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
@@ -115,8 +115,8 @@ std::unordered_multimap<cv::KeyPoint*, std::pair<Frame*, cv::KeyPoint*>> Matcher
 		}
 		if (matchedKp != nullptr)
 		{
-			auto p = std::make_pair(static_cast<KeyFrame*>(fr1), matchedKp);
-			ret.insert(std::make_pair(&(fr1->keypoints[i]), p));
+			auto p = std::make_pair(&(fr1->keypoints[i]), matchedKp);
+			ret.insert(std::make_pair(static_cast<KeyFrame*>(fr1), p));
 		}
 	}
 	return ret;
