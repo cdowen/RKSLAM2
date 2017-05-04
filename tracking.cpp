@@ -32,7 +32,7 @@ void Tracking::Run(std::string pathtoData)
 
 	int nImages=vstrImageFilenames.size();
 
-	for(int ni=0;ni<nImages-1;ni++)
+	for(int ni=500;ni<nImages-1;ni++)
 	{
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
@@ -43,27 +43,29 @@ void Tracking::Run(std::string pathtoData)
 		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold);
 		fr->mappoints.reserve(fr->keypoints.size());
 		std::fill(fr->mappoints.begin(), fr->mappoints.end(), nullptr);
-
+		fr->id = ni;
+		fr->timestamp = tframe;
+		lastFrame = currFrame;
 		currFrame = fr;
 		//Initialize.
 		if(mState==NOT_INITIALIZED)
 		{
-			if(!Initializer)
+			if (!Initializer)
 			{
-				if(fr->keypoints.size()>=100)
+				if (fr->keypoints.size() >= 100)
 				{
-					Initializer= new Initialization(this,*fr,2000);
-					FirstFrame=fr;
-					std::cout<<ni<<"th("<<std::setprecision(16)<<tframe<<") image is selected as FirstFrame!\n";
+					Initializer = new Initialization(this, *fr, 2000);
+					FirstFrame = fr;
+					std::cout << ni << "th(" << std::setprecision(16) << tframe
+							  << ") image is selected as FirstFrame!\n";
 				}
-			}
-			else
+			} else
 			{
-				std::cout<<ni<<"th("<<std::setprecision(16)<<tframe<<") image is selected as SecondFrame!\n";
-				if(fr->keypoints.size()<100)
+				std::cout << ni << "th(" << std::setprecision(16) << tframe << ") image is selected as SecondFrame!\n";
+				if (fr->keypoints.size() < 100)
 				{
 					delete Initializer;
-					Initializer= nullptr;
+					Initializer = nullptr;
 					continue;
 				}
 
@@ -71,53 +73,72 @@ void Tracking::Run(std::string pathtoData)
 
 				std::vector<cv::KeyPoint> kp1, kp2;
 
-				if(Match.SearchForInitialization(FirstFrame, fr, 15)<100)
+				if (Match.SearchForInitialization(FirstFrame, fr, 15) < 100)
 				{
 					delete Initializer;
-					Initializer= nullptr;
+					Initializer = nullptr;
 					continue;
 				}
-				SecondFrame=fr;
-				KeyFrame* debug_kf = static_cast<KeyFrame*>(currFrame);
-				assert(debug_kf->sbiImg.size().height ==30&&debug_kf->sbiImg.size().width == 40);
-				cv::Mat R21;cv::Mat t21;
-				std::vector<cv::Point3f> vP3D; std::vector <bool> vbTriangulated;
-				if(!Initializer->Initialize(*SecondFrame, Match.MatchedPoints,R21,t21,vP3D,vbTriangulated))
+				SecondFrame = fr;
+				KeyFrame *debug_kf = static_cast<KeyFrame *>(currFrame);
+				assert(debug_kf->sbiImg.size().height == 30 && debug_kf->sbiImg.size().width == 40);
+				cv::Mat R21;
+				cv::Mat t21;
+				std::vector<cv::Point3f> vP3D;
+				std::vector<bool> vbTriangulated;
+				if (!Initializer->Initialize(*SecondFrame, Match.MatchedPoints, R21, t21, vP3D, vbTriangulated))
 				{
-					std::cout<<"Failed to Initialize.\n\n";
-				}
-				else
+					std::cout << "Failed to Initialize.\n\n";
+				} else
 				{
-					std::cout<<"System Initialized !\n\n";
+					std::cout << "System Initialized !\n\n";
 					// store points in keyframe
-					Map* map = Map::getInstance();
-					for (int i = 0;i<vP3D.size();i++)
+					Map *map = Map::getInstance();
+					for (int i = 0; i < vP3D.size(); i++)
 					{
+						SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame *>(FirstFrame),
+																		std::make_pair(
+																				&SecondFrame->keypoints[Match.MatchedPoints[i]],
+																				&FirstFrame->keypoints[i])));
 						if (vbTriangulated[i])
 						{
-							MapPoint* mp = new MapPoint;
+							MapPoint *mp = new MapPoint;
 							mp->Tw(0) = vP3D[i].x;
 							mp->Tw(1) = vP3D[i].y;
 							mp->Tw(2) = vP3D[i].z;
-							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), &FirstFrame->keypoints[i]));
-							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame*>(SecondFrame), &SecondFrame->keypoints[Match.MatchedPoints[i]]));
+							mp->allObservation.insert(
+									std::make_pair(static_cast<KeyFrame *>(FirstFrame), &FirstFrame->keypoints[i]));
+							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame *>(SecondFrame),
+																	 &SecondFrame->keypoints[Match.MatchedPoints[i]]));
 							FirstFrame->mappoints[i] = mp;
 							SecondFrame->mappoints[Match.MatchedPoints[i]] = mp;
 							map->allMapPoint.push_back(mp);
 						}
 					}
-					map->allKeyFrame.push_back(static_cast<KeyFrame*>(FirstFrame));
-					map->allKeyFrame.push_back(static_cast<KeyFrame*>(SecondFrame));
+					map->allKeyFrame.push_back(static_cast<KeyFrame *>(FirstFrame));
+					map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
+					lastFrame = SecondFrame;
 					mState = OK;
-					//break;
+					continue;
 				}
 			}
-			// TODO: assign value to lastFrame
+		}
 			if(mState==OK)
 			{
+				std::cout<<"Tracking..."<<std::endl;
 				Map* map = Map::getInstance();
 				auto kf = map->allKeyFrame.back();
 				auto a = ComputeHGlobalSBI(lastFrame, currFrame);
+				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
+				std::map<KeyFrame*, cv::Mat> khs;
+				for (int i = 0;i<kfs.size();i++)
+				{
+					cv::Mat b = ComputeHGlobalKF(kfs[i], lastFrame);
+					cv::Mat c = b*a;
+					khs.insert(std::make_pair(kfs[i], c));
+				}
+				Matcher match;
+				match.SearchMatchByGlobal(currFrame, khs);
 
 
 				//std::map<KeyFrame*, cv::Mat> vec;
@@ -149,7 +170,6 @@ void Tracking::Run(std::string pathtoData)
 			}
 		}
 	}
-}
 
 typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
 constexpr float thHuber2D = sqrt(5.99);// from ORBSLAM
@@ -265,8 +285,11 @@ std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
 				max_kf = it->first;
 			}
 		}
-		kfs.push_back(max_kf);
-		kfv.erase(max_kf);
+		if (max_kf != nullptr)
+		{
+			kfs.push_back(max_kf);
+			kfv.erase(max_kf);
+		}
 	}
 	return kfs;
 }
@@ -351,6 +374,7 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	cv::eigen2cv(est._mat, result);
 	fr2->keyFrameSet.insert(std::make_pair(kf, result));
 	std::cout << "optimize with keypoint:"<< result << "\n";
+	return result;
 }
 
 cv::Mat Tracking::PoseEstimation(Frame* fr)
