@@ -89,17 +89,16 @@ void Tracking::Run(std::string pathtoData)
 				if (!Initializer->Initialize(*SecondFrame, Match.MatchedPoints, R21, t21, vP3D, vbTriangulated))
 				{
 					std::cout << "Failed to Initialize.\n\n";
-				} else
+				}
+				else
 				{
 					std::cout << "System Initialized !\n\n";
 					// store points in keyframe
 					Map *map = Map::getInstance();
+					std::map<cv::KeyPoint*, cv::KeyPoint*> mapData;
 					for (int i = 0; i < vP3D.size(); i++)
 					{
-						SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame *>(FirstFrame),
-																		std::make_pair(
-																				&SecondFrame->keypoints[Match.MatchedPoints[i]],
-																				&FirstFrame->keypoints[i])));
+						mapData.insert(std::make_pair(&SecondFrame->keypoints[Match.MatchedPoints[i]], &FirstFrame->keypoints[i]));
 						if (vbTriangulated[i])
 						{
 							MapPoint *mp = new MapPoint;
@@ -114,6 +113,7 @@ void Tracking::Run(std::string pathtoData)
 							SecondFrame->mappoints[Match.MatchedPoints[i]] = mp;
 							map->allMapPoint.push_back(mp);
 						}
+						SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), mapData));
 					}
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(FirstFrame));
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
@@ -138,7 +138,22 @@ void Tracking::Run(std::string pathtoData)
 					khs.insert(std::make_pair(kfs[i], c));
 				}
 				Matcher match;
-				match.SearchMatchByGlobal(currFrame, khs);
+				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
+				/*
+				// match with direct alignment.
+				int datanum = 0;
+				for (int i = 0;i<kfs.size(); i++)
+				{
+					datanum += match.SearchForInitialization(kfs[i], currFrame, 15);
+					std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> data;
+					for (auto j = match.MatchedPoints.begin();j!=match.MatchedPoints.end();j++)
+					{
+						data.insert(std::make_pair(kfs[i], std::make_pair(&currFrame->keypoints[j->first], &kfs[i]->keypoints[j->second])));
+					}
+					currFrame->matchedGroup = data;
+				}
+				std::cout<<"Matched points with keyframe:"<<datanum<<"\n";
+				*/
 
 
 				//std::map<KeyFrame*, cv::Mat> vec;
@@ -262,15 +277,7 @@ std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
 	std::map<KeyFrame*, int> kfv;
 	for (auto mit = lastFrame->matchedGroup.begin();mit!=lastFrame->matchedGroup.end();mit++)
 	{
-		std::map<KeyFrame *, int>::iterator it = kfv.find(mit->first);
-		if (it != kfv.end())
-		{
-			it->second++;
-		}
-		else
-		{
-			kfv.insert(std::make_pair(mit->first, 0));
-		}
+		kfv.insert(std::make_pair(mit->first, mit->second.size()));
 	}
 	std::vector<KeyFrame*> kfs;
 	for (int i = 0;i<MAX_KEYFRAME_COUNT;i++)
@@ -342,28 +349,26 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		optimizer.addEdge(e);
 	}
 
-	for (auto it = fr2->matchedGroup.begin();it!=fr2->matchedGroup.end();it++)
+	auto it = fr2->matchedGroup.find(kf);
+	// Must be in its overlapping set.
+	assert(it != fr2->matchedGroup.end());
+	Eigen::Vector2d kpmea;
+	for (auto it2 = it->second.begin();it2!=it->second.end();it2++)
 	{
-		if (it->first!=kf)
-		{
-			break;
-		}
-		Eigen::Vector2d kpmea;
-		kpmea[0] = it->second.first->pt.x;
-		kpmea[1] = it->second.first->pt.y;
-		EdgeProjection* e = new EdgeProjection();
+		kpmea[0] = it2->first->pt.x;
+		kpmea[1] = it2->first->pt.y;
+		EdgeProjection *e = new EdgeProjection();
 		e->setVertex(0, optimizer.vertex(0));
 		e->setMeasurement(kpmea);
-		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+		g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
 		rk->setDelta(thHuberDeltaX);
 		e->setRobustKernel(rk);
 
-		e->loc[0] = it->second.second->pt.x;
-		e->loc[1] = it->second.second->pt.y;
+		e->loc[0] = it2->second->pt.x;
+		e->loc[1] = it2->second->pt.y;
 		e->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
 		optimizer.addEdge(e);
 	}
-
 	optimizer.initializeOptimization();
 	cv::Mat result;
 	optimizer.setVerbose(true);

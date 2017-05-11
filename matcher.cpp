@@ -44,28 +44,26 @@ int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint k
 
 int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH)
 {
-	std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> data;
 	for (auto i = globalH.begin();i!=globalH.end(); i++)
 	{
 		auto tmpd = matchByH(i->first, fr1, i->second);
-		data.insert(tmpd.begin(), tmpd.end());
+		fr1->matchedGroup.insert(std::make_pair(i->first, tmpd));
 	}
-	fr1->matchedGroup = data;
-	return data.size();
+	return fr1->matchedGroup.size();
 }
 
 // Find corresponding feature points in two frames with homography
 // fr1 represent keyframe to project.
 // TODO: different search range for well and ill conditioned points
-std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
+std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 {
 	// kpl:points in fr1.
 	cv::Mat_<double> kpl(3,1);
 	// ppl:points projected to fr2.
 	cv::Mat_<double> ppl(3, 1);
-	std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> ret;
 	int width = fr1->image.size().width;
 	int height = fr1->image.size().height;
+	std::map<cv::KeyPoint*, cv::KeyPoint*> ret;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp = fr1->keypoints[i];
@@ -115,8 +113,7 @@ std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> Matc
 		}
 		if (matchedKp != nullptr)
 		{
-			auto p = std::make_pair(&(fr1->keypoints[i]), matchedKp);
-			ret.insert(std::make_pair(static_cast<KeyFrame*>(fr1), p));
+			ret.insert(std::make_pair(&(fr1->keypoints[i]), matchedKp));
 		}
 	}
 	return ret;
@@ -125,6 +122,45 @@ std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> Matc
 inline cv::Mat warpPoint(cv::Mat_<double> point, cv::Mat H)
 {
 	return H*point / point(2);
+}
+
+
+int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
+{
+	const int MAX_LOCAL_HOMO = 5;
+	const int RANSAC_TH = 3;
+	int matchNum = 0;
+	for (auto iter = currFrame->matchedGroup.begin();iter!=currFrame->matchedGroup.end(); iter++)
+	{
+		std::vector<cv::Point2f> fkp, kfkp;
+		for (auto iter2:iter->second)
+		{
+			fkp.push_back(iter2.first->pt);
+			kfkp.push_back(iter2.second->pt);
+		}
+		for (int i = 0;i<MAX_LOCAL_HOMO;i++)
+		{
+			cv::Mat mask;
+			cv::Mat homo = cv::findHomography(kfkp, fkp, CV_RANSAC, RANSAC_TH, mask);
+			if (homo.empty())
+			{
+				break;
+			}
+			// remove inliners
+			for (int j = 0;j<fkp.size();j++)
+			{
+				if (mask.at<uint8_t>(j)!=0)
+				{
+					fkp.erase(fkp.begin()+j);
+					kfkp.erase(kfkp.begin()+j);
+				}
+			}
+			auto ret = matchByH(kfs, currFrame, homo);
+			iter->second.insert(ret.begin(), ret.end());
+			matchNum+=ret.size();
+		}
+	}
+	return matchNum;
 }
 
 
