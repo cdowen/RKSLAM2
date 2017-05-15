@@ -32,7 +32,7 @@ void Tracking::Run(std::string pathtoData)
 
 	int nImages=vstrImageFilenames.size();
 
-	for(int ni=500;ni<nImages-1;ni++)
+	for(int ni=500;ni<nImages;ni++)
 	{
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];

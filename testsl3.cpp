@@ -4,6 +4,7 @@
 #include "KeyFrame.h"
 #include <opencv2/opencv.hpp>
 #include "matcher.h"
+#include "tracking.h"
 
 bool testSL3()
 {
@@ -30,4 +31,30 @@ void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 	vec.insert(std::make_pair(static_cast<KeyFrame*>(fr2), H));
 	int match_num = Match.SearchMatchByGlobal(fr1, vec);
 	std::cout<<"matched points by H:"<<match_num<<"\n";
+}
+
+void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat H)
+{
+	Tracking tr;
+	cv::Mat_<double> input, res;
+	input = cv::Mat(3, 1, CV_64FC1);
+	res = cv::Mat(3,1,CV_64FC1);
+	cv::Mat a = tr.ComputeHGlobalSBI(lastFrame, currFrame);
+	cv::Mat reM = cv::Mat(currFrame->image.size(), CV_8UC1, cv::Scalar(0));
+	for (int i = 0;i<currFrame->image.size().height;i++)
+	{
+		for (int j = 0;j<currFrame->image.size().width;j++)
+		{
+			input(0) = j;input(1) = i;input(2) = 1;
+			res = a*input;
+			res = res/res(2);
+			if (res(0)>=0&&res(0)<currFrame->image.size().width&&res(1)>=0&&res(1)<currFrame->image.size().height)
+			{
+				reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
+			}
+		}
+	}
+	cv::imshow("result", reM);
+	cv::imshow("second frame", currFrame->image);
+	cv::waitKey(0);
 }
