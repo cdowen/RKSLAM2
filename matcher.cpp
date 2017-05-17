@@ -91,6 +91,7 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 		int min_SSD_error = SSD_error_th;
 		cv::KeyPoint* matchedKp = nullptr;
 		// iterate to find the smallest error in fr2.
+		cv::Mat differ;
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
 			cv::Point2f pt2 = fr2->keypoints[j].pt;
@@ -102,7 +103,8 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 					continue;
 				}
 				cv::Mat patch = fr2->image.rowRange(pt2.y - patchHalfSize, pt2.y + patchHalfSize).colRange(pt2.x - patchHalfSize, pt2.x + patchHalfSize);
-				cv::Mat differ = (warped - patch)&(warped != 0);
+				cv::absdiff(warped, patch, differ);
+				differ = differ&(warped!=0);
 				int ssdError = differ.dot(differ);
 				if (ssdError < min_SSD_error)
 				{
@@ -141,10 +143,16 @@ int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
 		for (int i = 0;i<MAX_LOCAL_HOMO;i++)
 		{
 			cv::Mat mask;
+			// minimum points count for cv::findHomography
+			if (kfkp.size()<4)
+			{
+				break;
+			}
 			cv::Mat homo = cv::findHomography(kfkp, fkp, CV_RANSAC, RANSAC_TH, mask);
 			if (homo.empty())
 			{
-				break;
+				std::cout<<"cannot calculate homography"<<std::endl;
+				continue;
 			}
 			// remove inliners
 			for (int j = 0;j<fkp.size();j++)
@@ -161,6 +169,16 @@ int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
 		}
 	}
 	return matchNum;
+}
+
+int Matcher::SearchMatchByLocal(Frame* currFrame, std::vector<KeyFrame*> kfs)
+{
+	int totalMatchNum = 0;
+	for (int i = 0;i<kfs.size();i++)
+	{
+		totalMatchNum+=MatchByLocalH(currFrame, kfs[i]);
+	}
+	return totalMatchNum;
 }
 
 

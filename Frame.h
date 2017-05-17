@@ -18,7 +18,7 @@ public:
 	std::vector<MapPoint*> mappoints;
 	const int Fast_threshold=40;	
 	//map a keypoint here with corresponding feature points in keyframe;
-	typedef std::map<KeyFrame*, std::map<cv::KeyPoint*, cv::KeyPoint*>> MultiMatch;
+	typedef std::unordered_map<KeyFrame*, std::map<cv::KeyPoint*, cv::KeyPoint*>> MultiMatch;
 	//std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> matchedGroup;
 	MultiMatch matchedGroup;
 	std::map<KeyFrame*, cv::Mat> keyFrameSet;

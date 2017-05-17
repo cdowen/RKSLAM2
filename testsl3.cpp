@@ -33,7 +33,7 @@ void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 	std::cout<<"matched points by H:"<<match_num<<"\n";
 }
 
-void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat H)
+void testProjection(Frame* lastFrame, Frame* currFrame)
 {
 	Tracking tr;
 	cv::Mat_<double> input, res;
@@ -41,9 +41,9 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat H)
 	res = cv::Mat(3,1,CV_64FC1);
 	cv::Mat a = tr.ComputeHGlobalSBI(lastFrame, currFrame);
 	cv::Mat reM = cv::Mat(currFrame->image.size(), CV_8UC1, cv::Scalar(0));
-	for (int i = 0;i<currFrame->image.size().height;i++)
+	for (int i = 0;i<currFrame->image.rows;i++)
 	{
-		for (int j = 0;j<currFrame->image.size().width;j++)
+		for (int j = 0;j<currFrame->image.cols;j++)
 		{
 			input(0) = j;input(1) = i;input(2) = 1;
 			res = a*input;
