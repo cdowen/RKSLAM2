@@ -93,6 +93,10 @@ void Tracking::Run(std::string pathtoData)
 				else
 				{
 					std::cout << "System Initialized !\n\n";
+					// store mTcw of keyframes
+					SecondFrame->mTcw.colRange(0,3).rowRange(0,3)=R21;
+					SecondFrame->mTcw.colRange(0,3).row(3)=t21;
+
 					// store points in keyframe
 					Map *map = Map::getInstance();
 					std::map<cv::KeyPoint*, cv::KeyPoint*> mapData;

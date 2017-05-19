@@ -11,6 +11,9 @@ public:
 	std::vector<MapPoint*> allMapPoint;
 	bool addKeyFrame(KeyFrame*);
 
+
+
+
 private:
 	static Map* instance;
 };

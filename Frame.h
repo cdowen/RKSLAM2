@@ -22,5 +22,7 @@ public:
 	//std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> matchedGroup;
 	MultiMatch matchedGroup;
 	std::map<KeyFrame*, cv::Mat> keyFrameSet;
+	//camera pose
+	cv::Mat mTcw=cv::Mat::eye(4,4,CV_64F);
 };
 #endif
