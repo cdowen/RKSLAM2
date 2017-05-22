@@ -19,7 +19,6 @@ ${CSPARSE_INCLUDE_DIR}
 add_executable(rkslam2 
 main.cpp
 tracking.cpp
-sl3.cpp
 sl3vertex.cpp
 sl3edge.cpp
 matcher.cpp

@@ -29,10 +29,22 @@ void Tracking::Run(std::string pathtoData)
 	std::vector<double> vTimestamps;
 	std::string strFile=pathtoData+"/rgb.txt";
 	LoadImages(strFile,vstrImageFilenames,vTimestamps);
-
 	int nImages=vstrImageFilenames.size();
+	Frame* lastFrame = new Frame();
+	lastFrame->image = cv::imread("1.png", CV_LOAD_IMAGE_GRAYSCALE);
+	cv::resize(lastFrame->image, lastFrame->sbiImg, cv::Size(40, 30));
+	cv::GaussianBlur(lastFrame->sbiImg, lastFrame->sbiImg, cv::Size(0, 0), 0.75);
+	Frame* currFrame = new Frame();
+	currFrame->image = cv::imread("2.png", CV_LOAD_IMAGE_GRAYSCALE);
+	cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40,30));
+	cv::GaussianBlur(currFrame->sbiImg, currFrame->sbiImg, cv::Size(0,0), 0.75);
 
-	for(int ni=500;ni<nImages;ni++)
+	auto m = ComputeHGlobalSBI(lastFrame, currFrame);
+	void testProjection(Frame* lastFrame, Frame* currFrame);
+	testProjection(lastFrame, currFrame);
+	exit(0);
+
+	for(int ni=0;ni<nImages;ni++)
 	{
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
@@ -47,6 +59,23 @@ void Tracking::Run(std::string pathtoData)
 		fr->timestamp = tframe;
 		lastFrame = currFrame;
 		currFrame = fr;
+
+		if (ni==0)
+		{
+			continue;
+		}
+		std::cout<<"lastFrameTimestamp:"<<std::setprecision(16)<<lastFrame->timestamp<<"\n";
+		std::cout<<"currFrameTimestamp:"<<std::setprecision(16)<<currFrame->timestamp<<"\n";
+		Matcher matcher;
+		cv::Mat h = ComputeHGlobalSBI(lastFrame, currFrame);
+		auto m = matcher.matchByH(lastFrame, currFrame, h);
+		int d = matcher.SearchForInitialization(lastFrame, currFrame, 5);
+		std::cout<<"match by direct alignment:"<<d<<"\n";
+		currFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(lastFrame), m));
+		std::cout<<"match by global H:"<<m.size()<<"\n";
+		int matchNum = matcher.MatchByLocalH(currFrame, static_cast<KeyFrame*>(lastFrame));
+		std::cout<<"match by local H:"<<matchNum<<"\n";
+		continue;
 		//Initialize.
 		if(mState==NOT_INITIALIZED)
 		{
@@ -139,6 +168,8 @@ void Tracking::Run(std::string pathtoData)
 				}
 				Matcher match;
 				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
+				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
+
 				/*
 				// match with direct alignment.
 				int datanum = 0;
@@ -216,8 +247,8 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.00001);
-	action->setMaxIterations(10);
+	action->setGainThreshold(0.0000000001);
+	action->setMaxIterations(100);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -238,7 +269,7 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		e->loc[1] = i/im1.size().width;
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;
-		e->image = &im2;
+		e->_image = &im2;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
@@ -250,11 +281,9 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	//for (int i = 0; i < 200; i++)
 	//{
 	int validCount = 0;
-		optimizer.optimize(50);
-		SL3 est;
+	optimizer.optimize(50);
 		VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-		est = sl3d->estimate();
-		cv::eigen2cv(est._mat, result);
+		cv::eigen2cv(sl3d->estimate(), result);
 		std::cout << result << "\n";
 		std::vector<g2o::OptimizableGraph::Edge*> edges = optimizer.activeEdges();
 		for (int i = 0; i < edges.size(); i++)
@@ -327,7 +356,7 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
-	vSL3->setEstimate(SL3());
+	vSL3->setEstimate(Eigen::Matrix3d::Identity());
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
@@ -342,7 +371,7 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 
 		e->loc[0] = i%im1.size().width;
 		e->loc[1] = i/im1.size().width;
-		e->image = &im2;
+		e->_image = &im2;
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
@@ -372,11 +401,10 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	optimizer.initializeOptimization();
 	cv::Mat result;
 	optimizer.setVerbose(true);
+	solver->setWriteDebug(true);
 	optimizer.optimize(50);
-	SL3 est;
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-	est = sl3d->estimate();
-	cv::eigen2cv(est._mat, result);
+	cv::eigen2cv(sl3d->estimate(), result);
 	fr2->keyFrameSet.insert(std::make_pair(kf, result));
 	std::cout << "optimize with keypoint:"<< result << "\n";
 	return result;
