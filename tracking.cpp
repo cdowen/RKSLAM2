@@ -39,7 +39,7 @@ void Tracking::Run(std::string pathtoData)
 	cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40,30));
 	cv::GaussianBlur(currFrame->sbiImg, currFrame->sbiImg, cv::Size(0,0), 0.75);
 
-	auto m = ComputeHGlobalSBI(lastFrame, currFrame);
+	//auto m = ComputeHGlobalSBI(lastFrame, currFrame);
 	void testProjection(Frame* lastFrame, Frame* currFrame);
 	testProjection(lastFrame, currFrame);
 	exit(0);
@@ -217,7 +217,7 @@ void Tracking::Run(std::string pathtoData)
 		}
 	}
 
-typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
+typedef g2o::BlockSolver<g2o::BlockSolverTraits<10, 1>> BlockSolver_8_1;
 constexpr float thHuber2D = sqrt(5.99);// from ORBSLAM
 const float thHuberDeltaI = 0.1;
 const float thHuberDeltaX = 10;
@@ -229,11 +229,11 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
 	im1 = fr1->sbiImg; im2 = fr2->sbiImg;
+	im1 = im1-cv::mean(im1)[0];
+	im2 = im2-cv::mean(im2)[0];
 
-	Sobel(im2, xgradient, CV_32FC1, 1, 0);
-	Sobel(im2, ygradient, CV_32FC1, 0, 1);
-	xgradient = xgradient / 4.0;
-	ygradient = ygradient / 4.0;
+	Sobel(im2, xgradient, CV_32FC1, 1, 0, 1);
+	Sobel(im2, ygradient, CV_32FC1, 0, 1, 1);
 
 
 	g2o::SparseOptimizer optimizer;
@@ -252,7 +252,6 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
-	vSL3->updateCache();
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
@@ -277,14 +276,21 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	solver->setWriteDebug(true);
 	optimizer.initializeOptimization();
 	cv::Mat result;
-	double data[8];
 	//for (int i = 0; i < 200; i++)
 	//{
 	int validCount = 0;
+	optimizer.optimize(1);
+	double *hdata = optimizer.vertex(0)->hessianData();
+	double * bdata = optimizer.vertex(0)->bData();
+	Eigen::Matrix<double, 9, 9> hessian(hdata);
+	Eigen::Matrix<double, 9, 1> b(bdata);
+	std::cout<<"hessian:"<<hessian<<std::endl;
+	std::cout<<"b:"<<b<<std::endl;
 	optimizer.optimize(50);
 		VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
 		cv::eigen2cv(sl3d->estimate(), result);
 		std::cout << result << "\n";
+		std::cout<<"mu:"<<sl3d->mu<<"\n";
 		std::vector<g2o::OptimizableGraph::Edge*> edges = optimizer.activeEdges();
 		for (int i = 0; i < edges.size(); i++)
 		{

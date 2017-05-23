@@ -9,6 +9,21 @@ bool validateProjection(Eigen::Vector3d hLoc, cv::Size s)
 	return false;
 }
 
+float getPixelValuef(float x, float y, cv::Mat* image)
+{
+	float* data = (float*)image->ptr(int(y));
+	data = data+int(x);
+	float xx = x - floor ( x );
+	float yy = y - floor ( y );
+	float res =
+			( 1-xx ) * ( 1-yy ) * data[0] +
+			xx* ( 1-yy ) * data[1] +
+			( 1-xx ) *yy*data[ image->step1() ] +
+			xx*yy*data[image->step1()+1];
+	//std::cout<<"interpoed:"<<res<<" other four:"<<*data<<" "<<*(data+1)<<" "<<float(image->at<float>(y+1, x))<<" "<<float(image->at<float>(y+1, x+1))<<std::endl;
+	return res;
+}
+
 Eigen::Vector3d EdgeSL3::homo_project()
 	{
 		Eigen::Vector3d hLoc;
@@ -30,7 +45,10 @@ Eigen::Vector3d EdgeSL3::homo_project()
 		}
 		isValid = true;
 		float data = getPixelValue(hLoc[0], hLoc[1]);
-		_error[0] = _measurement - data;
+		//float data = _image->at<uint8_t>(hLoc[1], hLoc[0]);
+
+		const VertexSL3* v1 = static_cast<const VertexSL3*>(_vertices[0]);
+		_error[0] = _measurement - data+v1->mu;
 	}
 
 	void EdgeSL3::linearizeOplus()
@@ -45,8 +63,11 @@ Eigen::Vector3d EdgeSL3::homo_project()
 			isValid = false;
 		    return;
 		}
-		float xgrd = xgradient->at<float>(hLoc[1], hLoc[0]);
-		float ygrd = ygradient->at<float>(hLoc[1], hLoc[0]);
+		float xgrd = getPixelValuef(hLoc[0], hLoc[1], xgradient);
+		float ygrd = getPixelValuef(hLoc[0], hLoc[1], ygradient);
+		//float xgrd = xgradient->at<float>(hLoc[1], hLoc[0]);
+		//float ygrd = ygradient->at<float>(hLoc[1], hLoc[0]);
+
 		/*
 		_jacobianOplusXi[0] = -xgrd;
 		_jacobianOplusXi[1] = -ygrd;
@@ -87,9 +108,11 @@ Eigen::Vector3d EdgeSL3::homo_project()
 		_jacobianOplusXi[5] = -ygrd;
 		_jacobianOplusXi[6] = x1*x1*xgrd+x1*x2*ygrd;
 		_jacobianOplusXi[7] = x1*x2*xgrd+x2*x2*ygrd;
+		_jacobianOplusXi[8] = x1*xgrd+x2*xgrd;
+		_jacobianOplusXi[9] = 1;
 		std::vector<double> debugN;
 		isValid = true;
-		for (int i = 0; i < 8; i++)
+		for (int i = 0; i < 9; i++)
 		{
 			debugN.push_back(_jacobianOplusXi[i]);
 		}
@@ -110,10 +133,15 @@ float EdgeSL3::getPixelValue ( float x, float y)
 	uchar* data = & _image->data[ int ( y ) * _image->step + int ( x ) ];
 	float xx = x - floor ( x );
 	float yy = y - floor ( y );
-	return float (
+	float res =
+		float (
 			( 1-xx ) * ( 1-yy ) * data[0] +
 			xx* ( 1-yy ) * data[1] +
 			( 1-xx ) *yy*data[ _image->step ] +
 			xx*yy*data[_image->step+1]
 	);
+
+	//std::cout<<"interpoed:"<<res<<" other four:"<<int(*data)<<" "<<int(*(data+1))<<" "<<int(_image->at<uint8_t>(y+1, x))<<" "<<int(_image->at<uint8_t>(y+1, x+1))<<std::endl;
+	return res;
 }
+

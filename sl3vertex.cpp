@@ -24,10 +24,11 @@ bool VertexSL3::write(std::ostream& os) const
 void VertexSL3::oplusImpl(const double *update)
 {
 	Eigen::Matrix3d upv;
-	for (int i = 0;i<8;i++)
+	for (int i = 0;i<9;i++)
 	{
 		upv(i/3, i%3) = update[i];
 	}
-	upv(2,2) = 0;
 	_estimate = _estimate+upv;
+	_estimate = _estimate/_estimate(2,2);
+	mu = update[9]+mu;
 }
