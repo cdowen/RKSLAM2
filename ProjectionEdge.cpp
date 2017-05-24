@@ -14,22 +14,22 @@ void EdgeProjection::computeError()
 
 void EdgeProjection::linearizeOplus()
 {
-	_jacobianOplusXi(0,0) = 1;
-	_jacobianOplusXi(0,1) = 0;
-	_jacobianOplusXi(0,2) = loc[1];
+	_jacobianOplusXi(0,0) = loc[0];
+	_jacobianOplusXi(0,1) = loc[1];
+	_jacobianOplusXi(0,2) = 1;
 	_jacobianOplusXi(0,3) = 0;
-	_jacobianOplusXi(0,4) = loc[0];
-	_jacobianOplusXi(0,5) = -loc[0];
-	_jacobianOplusXi(0,6) = -loc[0]*loc[0];
-	_jacobianOplusXi(0,7) = -loc[0]*loc[1];
+	_jacobianOplusXi(0,4) = 0;
+	_jacobianOplusXi(0,5) = 0;
+	_jacobianOplusXi(0,6) = 0;
+	_jacobianOplusXi(0,7) = 0;
 	_jacobianOplusXi(1,0) = 0;
-	_jacobianOplusXi(1,1) = 1;
+	_jacobianOplusXi(1,1) = 0;
 	_jacobianOplusXi(1,2) = 0;
 	_jacobianOplusXi(1,3) = loc[0];
-	_jacobianOplusXi(1,4) = -loc[1];
-	_jacobianOplusXi(1,5) = -loc[1]*2;
-	_jacobianOplusXi(1,6) = -loc[0]*loc[1];
-	_jacobianOplusXi(1,7) = -loc[1]*loc[1];
+	_jacobianOplusXi(1,4) = loc[1];
+	_jacobianOplusXi(1,5) = 1;
+	_jacobianOplusXi(1,6) = 0;
+	_jacobianOplusXi(1,7) = 0;
 }
 
 bool EdgeProjection::write(std::ostream &os) const
