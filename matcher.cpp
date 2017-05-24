@@ -31,14 +31,25 @@ int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2, int radius)
 	return Matched_num;
 }
 
+
 //compute the sum of squared difference (SSD) between patches(5x5).
 int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint kp2)
 {
 	int x1 = kp1.pt.x; int y1 = kp1.pt.y;
 	int x2 = kp2.pt.x; int y2 = kp2.pt.y;
-	cv::Mat fr1_Range = fr1->image.colRange(x1 - 2, x1 + 3).rowRange(y1 - 2, y1 + 3);
-	cv::Mat fr2_Range = fr1->image.colRange(x2 - 2, x2 + 3).rowRange(y2 - 2, y2 + 3);
-	cv::Mat differ = fr1_Range - fr2_Range;
+	int height = fr1->image.rows;int width = fr1->image.cols;
+	if (x1-patchHalfSize<0||x1+patchHalfSize>=width||y1-patchHalfSize<0||y1+patchHalfSize>=height)
+	{
+		return INT_MAX;
+	}
+	if (x2-patchHalfSize<0||x2+patchHalfSize>=width||y2-patchHalfSize<0||y2+patchHalfSize>=height)
+	{
+		return INT_MAX;
+	}
+	cv::Mat fr1_Range = fr1->image.colRange(x1 - patchHalfSize, x1 + patchHalfSize).rowRange(y1 - patchHalfSize, y1 + patchHalfSize);
+	cv::Mat fr2_Range = fr1->image.colRange(x2 - patchHalfSize, x2 + patchHalfSize).rowRange(y2 - patchHalfSize, y2 + patchHalfSize);
+	cv::Mat differ;
+	cv::absdiff(fr1_Range, fr2_Range, differ);
 	return differ.dot(differ);
 }
 
