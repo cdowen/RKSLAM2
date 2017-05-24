@@ -31,7 +31,6 @@ void testProjection(Frame* lastFrame, Frame* currFrame)
 		{
 			input(0) = j;input(1) = i;input(2) = 1;
 			res = a*input;
-			res = res/res(2);
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)
 			{
 				reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);

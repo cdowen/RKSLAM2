@@ -2,7 +2,7 @@
 #define SL3VERTEX_H
 #include <Eigen/Dense>
 #include <g2o/core/base_vertex.h>
-class VertexSL3 :public g2o::BaseVertex<10, Eigen::Matrix3d>
+class VertexSL3 :public g2o::BaseVertex<9, Eigen::Matrix3d>
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
