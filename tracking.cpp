@@ -309,10 +309,11 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	cv::Mat im1 = kf->sbiImg;
 	cv::Mat im2 = fr2->sbiImg;
 	cv::Mat xgradient, ygradient;
-	Sobel(im2, xgradient, CV_32FC1, 1, 0);
-	Sobel(im2, ygradient, CV_32FC1, 0, 1);
-	xgradient = xgradient / 4.0;
-	ygradient = ygradient / 4.0;
+	im1 = im1-cv::mean(im1)[0];
+	im2 = im2-cv::mean(im2)[0];
+
+	Sobel(im2, xgradient, CV_32FC1, 1, 0, 1);
+	Sobel(im2, ygradient, CV_32FC1, 0, 1, 1);
 
 	g2o::SparseOptimizer optimizer;
 	BlockSolver_9_1::LinearSolverType * linearSolver;
