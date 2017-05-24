@@ -5,7 +5,7 @@ void EdgeProjection::computeError()
 	Eigen::Vector3d hLoc;
 	hLoc << loc[0], loc[1], 1;
 	const VertexSL3* v1 = static_cast<const VertexSL3*>(_vertices[0]);
-	hLoc = v1->estimate()._mat*hLoc;
+	hLoc = v1->estimate()*hLoc;
 	hLoc = hLoc / hLoc[2];
 	Eigen::Vector2d res;
 	res <<hLoc[0], hLoc[1];

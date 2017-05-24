@@ -195,6 +195,8 @@ void Tracking::Run(std::string pathtoData)
 				}
 				Matcher match;
 				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
+				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
+
 				/*
 				// match with direct alignment.
 				int datanum = 0;
@@ -242,7 +244,7 @@ void Tracking::Run(std::string pathtoData)
 		}
 	}
 
-typedef g2o::BlockSolver<g2o::BlockSolverTraits<8, 1>> BlockSolver_8_1;
+typedef g2o::BlockSolver<g2o::BlockSolverTraits<9, 1>> BlockSolver_9_1;
 constexpr float thHuber2D = sqrt(5.99);// from ORBSLAM
 const float thHuberDeltaI = 0.1;
 const float thHuberDeltaX = 10;
@@ -254,30 +256,29 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
 	im1 = fr1->sbiImg; im2 = fr2->sbiImg;
+	im1 = im1-cv::mean(im1)[0];
+	im2 = im2-cv::mean(im2)[0];
 
-	Sobel(im2, xgradient, CV_32FC1, 1, 0);
-	Sobel(im2, ygradient, CV_32FC1, 0, 1);
-	xgradient = xgradient / 4.0;
-	ygradient = ygradient / 4.0;
+	Sobel(im2, xgradient, CV_32FC1, 1, 0, 1);
+	Sobel(im2, ygradient, CV_32FC1, 0, 1, 1);
 
 
 	g2o::SparseOptimizer optimizer;
-	BlockSolver_8_1::LinearSolverType * linearSolver;
-	linearSolver = new g2o::LinearSolverDense<BlockSolver_8_1::PoseMatrixType>();
+	BlockSolver_9_1::LinearSolverType * linearSolver;
+	linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
 
-	BlockSolver_8_1 * solver_ptr = new BlockSolver_8_1(linearSolver);
+	BlockSolver_9_1 * solver_ptr = new BlockSolver_9_1(linearSolver);
 
 	g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
 	optimizer.setAlgorithm(solver);
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.00001);
+	action->setGainThreshold(0.001);
 	action->setMaxIterations(10);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
-	vSL3->updateCache();
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
@@ -294,7 +295,7 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		e->loc[1] = i/im1.size().width;
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;
-		e->image = &im2;
+		e->_image = &im2;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
@@ -302,16 +303,14 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	solver->setWriteDebug(true);
 	optimizer.initializeOptimization();
 	cv::Mat result;
-	double data[8];
 	//for (int i = 0; i < 200; i++)
 	//{
 	int validCount = 0;
-		optimizer.optimize(50);
-		SL3 est;
+	optimizer.optimize(50);
 		VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-		est = sl3d->estimate();
-		cv::eigen2cv(est._mat, result);
+		cv::eigen2cv(sl3d->estimate(), result);
 		std::cout << result << "\n";
+		std::cout<<"mu:"<<sl3d->mu<<"\n";
 		std::vector<g2o::OptimizableGraph::Edge*> edges = optimizer.activeEdges();
 		for (int i = 0; i < edges.size(); i++)
 		{
@@ -362,16 +361,17 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	cv::Mat im1 = kf->sbiImg;
 	cv::Mat im2 = fr2->sbiImg;
 	cv::Mat xgradient, ygradient;
-	Sobel(im2, xgradient, CV_32FC1, 1, 0);
-	Sobel(im2, ygradient, CV_32FC1, 0, 1);
-	xgradient = xgradient / 4.0;
-	ygradient = ygradient / 4.0;
+	im1 = im1-cv::mean(im1)[0];
+	im2 = im2-cv::mean(im2)[0];
+
+	Sobel(im2, xgradient, CV_32FC1, 1, 0, 1);
+	Sobel(im2, ygradient, CV_32FC1, 0, 1, 1);
 
 	g2o::SparseOptimizer optimizer;
-	BlockSolver_8_1::LinearSolverType * linearSolver;
-	linearSolver = new g2o::LinearSolverDense<BlockSolver_8_1::PoseMatrixType>();
+	BlockSolver_9_1::LinearSolverType * linearSolver;
+	linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
 
-	BlockSolver_8_1 * solver_ptr = new BlockSolver_8_1(linearSolver);
+	BlockSolver_9_1 * solver_ptr = new BlockSolver_9_1(linearSolver);
 
 	g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
 	optimizer.setAlgorithm(solver);
@@ -383,7 +383,7 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
-	vSL3->setEstimate(SL3());
+	vSL3->setEstimate(Eigen::Matrix3d::Identity());
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
@@ -398,7 +398,7 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 
 		e->loc[0] = i%im1.size().width;
 		e->loc[1] = i/im1.size().width;
-		e->image = &im2;
+		e->_image = &im2;
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
@@ -429,10 +429,8 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	cv::Mat result;
 	optimizer.setVerbose(true);
 	optimizer.optimize(50);
-	SL3 est;
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-	est = sl3d->estimate();
-	cv::eigen2cv(est._mat, result);
+	cv::eigen2cv(sl3d->estimate(), result);
 	fr2->keyFrameSet.insert(std::make_pair(kf, result));
 	std::cout << "optimize with keypoint:"<< result << "\n";
 	return result;
