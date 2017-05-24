@@ -192,7 +192,7 @@ void Tracking::Run(std::string pathtoData)
 		}
 	}
 
-typedef g2o::BlockSolver<g2o::BlockSolverTraits<9, 1>> BlockSolver_8_1;
+typedef g2o::BlockSolver<g2o::BlockSolverTraits<9, 1>> BlockSolver_9_1;
 constexpr float thHuber2D = sqrt(5.99);// from ORBSLAM
 const float thHuberDeltaI = 0.1;
 const float thHuberDeltaX = 10;
@@ -212,10 +212,10 @@ cv::Mat Tracking::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 
 
 	g2o::SparseOptimizer optimizer;
-	BlockSolver_8_1::LinearSolverType * linearSolver;
-	linearSolver = new g2o::LinearSolverDense<BlockSolver_8_1::PoseMatrixType>();
+	BlockSolver_9_1::LinearSolverType * linearSolver;
+	linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
 
-	BlockSolver_8_1 * solver_ptr = new BlockSolver_8_1(linearSolver);
+	BlockSolver_9_1 * solver_ptr = new BlockSolver_9_1(linearSolver);
 
 	g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
 	optimizer.setAlgorithm(solver);
@@ -315,10 +315,10 @@ cv::Mat Tracking::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	ygradient = ygradient / 4.0;
 
 	g2o::SparseOptimizer optimizer;
-	BlockSolver_8_1::LinearSolverType * linearSolver;
-	linearSolver = new g2o::LinearSolverDense<BlockSolver_8_1::PoseMatrixType>();
+	BlockSolver_9_1::LinearSolverType * linearSolver;
+	linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
 
-	BlockSolver_8_1 * solver_ptr = new BlockSolver_8_1(linearSolver);
+	BlockSolver_9_1 * solver_ptr = new BlockSolver_9_1(linearSolver);
 
 	g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
 	optimizer.setAlgorithm(solver);
