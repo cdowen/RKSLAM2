@@ -1,9 +1,11 @@
 #include "matcher.h"
 #include <stdint.h>
 #include "KeyFrame.h"
-int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2, int radius)
+int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 {
+	MatchedPoints.clear();
 	int Matched_num = 0;
+	int num=0;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp1 = fr1->keypoints.at(i);
@@ -13,9 +15,10 @@ int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2, int radius)
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
 			cv::KeyPoint kp2 = fr2->keypoints.at(j);
-			if ((kp2.pt.x - x)*(kp2.pt.x - x) + (kp2.pt.y - y)*(kp2.pt.y - y) < radius*radius)
+			if (abs(kp2.pt.x - x)<InitSearchHalfLength&&abs(kp2.pt.y-y)<InitSearchHalfLength)
 			{
 				int SSD_error = SSDcompute(fr1, fr2, kp1, kp2);
+				//std::cout<<SSD_error<<std::endl;
 				if (SSD_error < min_SSD_error)
 				{
 					min_SSD_error = SSD_error;
@@ -28,18 +31,34 @@ int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2, int radius)
 			Matched_num++;
 		}
 	}
+
 	return Matched_num;
 }
 
-//compute the sum of squared difference (SSD) between patches(5x5).
+//compute the sum of squared difference (SSD) between patches(9x9).
 int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint kp2)
 {
 	int x1 = kp1.pt.x; int y1 = kp1.pt.y;
 	int x2 = kp2.pt.x; int y2 = kp2.pt.y;
-	cv::Mat fr1_Range = fr1->image.colRange(x1 - 2, x1 + 3).rowRange(y1 - 2, y1 + 3);
-	cv::Mat fr2_Range = fr1->image.colRange(x2 - 2, x2 + 3).rowRange(y2 - 2, y2 + 3);
-	cv::Mat differ = fr1_Range - fr2_Range;
-	return differ.dot(differ);
+	int width = fr1->image.size().width;
+	int height = fr1->image.size().height;
+	if (x1-patchHalfSize<0||x1+patchHalfSize+1>width||x2-patchHalfSize<0||x2+patchHalfSize+1>width||y1-patchHalfSize<0||y1+patchHalfSize+1>height||y2-patchHalfSize<0||y2+patchHalfSize+1>height)
+	{
+		return SSD_error_th;
+	} else
+	{
+		cv::Mat fr1_Range = fr1->image.colRange(x1 - patchHalfSize, x1 + patchHalfSize+1).rowRange(y1 - patchHalfSize, y1 + patchHalfSize+1);
+		cv::Mat fr2_Range = fr1->image.colRange(x2 - patchHalfSize, x2 + patchHalfSize+1).rowRange(y2 - patchHalfSize, y2 + patchHalfSize+1);
+
+		//Improve the SSD method by substracting the mean of patch.
+		/*cv::Mat Mean1(7,7,CV_8UC1,cv::Scalar::all(-cv::mean(fr1_Range).val[0]));
+		cv::add(fr1_Range,Mean1,fr1_Range);
+		cv::Mat Mean2(7,7,CV_8UC1,cv::Scalar::all(-cv::mean(fr2_Range).val[0]));
+		cv::add(fr2_Range,Mean2,fr2_Range);*/
+
+		cv::Mat differ = fr1_Range - fr2_Range;
+		return (int)differ.dot(differ);
+	}
 }
 
 int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH)

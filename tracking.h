@@ -28,9 +28,6 @@ public:
 	Frame* currFrame, *lastFrame;
 	cv::Mat mK;
 
-
-
-
 private:
 	void LoadImages(const std::string &strFile, std::vector<std::string> &vstrImageFilenames,
 					std::vector<double> &vTimestamps);
@@ -38,5 +35,6 @@ private:
 	Initialization* Initializer;
 	Frame* FirstFrame;
 	Frame* SecondFrame;
+	int ReInitialForce;
 };
 #endif

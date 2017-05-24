@@ -19,10 +19,15 @@
 #include <chrono>
 #include <g2o/types/slam3d/se3quat.h>
 
+#include <iostream>
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
 
 void Tracking::Run(std::string pathtoData)
 {
+
+	//for test.
+	/*std::ofstream file;
+	file.open("file.txt");*/
 
 	//Load Images.
 	std::vector<std::string> vstrImageFilenames;
@@ -32,7 +37,7 @@ void Tracking::Run(std::string pathtoData)
 
 	int nImages=vstrImageFilenames.size();
 
-	for(int ni=500;ni<nImages;ni++)
+	for(int ni=0;ni<nImages;ni++)
 	{
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
@@ -40,10 +45,10 @@ void Tracking::Run(std::string pathtoData)
 		cv::resize(im, fr->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
 		fr->image = im;
+		fr->id = ni;
 		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold);
 		fr->mappoints.reserve(fr->keypoints.size());
 		std::fill(fr->mappoints.begin(), fr->mappoints.end(), nullptr);
-		fr->id = ni;
 		fr->timestamp = tframe;
 		lastFrame = currFrame;
 		currFrame = fr;
@@ -56,12 +61,20 @@ void Tracking::Run(std::string pathtoData)
 				{
 					Initializer = new Initialization(this, *fr, 2000);
 					FirstFrame = fr;
+					ReInitialForce=0;
 					std::cout << ni << "th(" << std::setprecision(16) << tframe
 							  << ") image is selected as FirstFrame!\n";
 				}
 			} else
 			{
 				std::cout << ni << "th(" << std::setprecision(16) << tframe << ") image is selected as SecondFrame!\n";
+				ReInitialForce++;
+				if (ReInitialForce>10)
+				{
+					delete Initializer;
+					Initializer = nullptr;
+					continue;
+				}
 				if (fr->keypoints.size() < 100)
 				{
 					delete Initializer;
@@ -73,18 +86,19 @@ void Tracking::Run(std::string pathtoData)
 
 				std::vector<cv::KeyPoint> kp1, kp2;
 
-				if (Match.SearchForInitialization(FirstFrame, fr, 15) < 100)
+				std::cout<<"Match "<<Match.SearchForInitialization(FirstFrame,fr)<<" points.\n";
+				if (Match.SearchForInitialization(FirstFrame, fr) < 100)
 				{
 					delete Initializer;
 					Initializer = nullptr;
 					continue;
 				}
 				SecondFrame = fr;
-				KeyFrame *debug_kf = static_cast<KeyFrame *>(currFrame);
-				assert(debug_kf->sbiImg.size().height == 30 && debug_kf->sbiImg.size().width == 40);
+				//KeyFrame *debug_kf = static_cast<KeyFrame *>(currFrame);
+				//assert(debug_kf->sbiImg.size().height == 30 && debug_kf->sbiImg.size().width == 40);
 				cv::Mat R21;
 				cv::Mat t21;
-				std::vector<cv::Point3f> vP3D;
+				std::vector<cv::Point3d> vP3D;
 				std::vector<bool> vbTriangulated;
 				if (!Initializer->Initialize(*SecondFrame, Match.MatchedPoints, R21, t21, vP3D, vbTriangulated))
 				{
@@ -94,35 +108,73 @@ void Tracking::Run(std::string pathtoData)
 				{
 					std::cout << "System Initialized !\n\n";
 					// store mTcw of keyframes
+					std::cout<<"R = "<<R21<<std::endl;
+					std::cout<<"t = "<<t21<<std::endl;
 					SecondFrame->mTcw.colRange(0,3).rowRange(0,3)=R21;
 					SecondFrame->mTcw.colRange(0,3).row(3)=t21;
+
+					//for test.
+					/*file<<std::setprecision(9)<<R21<<t21<<std::endl;
+					std::vector<cv::DMatch>match1to2;
+					std::vector<cv::KeyPoint>keypoints1={};
+					std::vector<cv::KeyPoint>keypoints2={};
+					int num=0;*/
 
 					// store points in keyframe
 					Map *map = Map::getInstance();
 					std::map<cv::KeyPoint*, cv::KeyPoint*> mapData;
-					for (int i = 0; i < vP3D.size(); i++)
+					for (std::map<int,int>::iterator MatchedPair=Match.MatchedPoints.begin();MatchedPair!=Match.MatchedPoints.end();++MatchedPair)
 					{
-						mapData.insert(std::make_pair(&SecondFrame->keypoints[Match.MatchedPoints[i]], &FirstFrame->keypoints[i]));
-						if (vbTriangulated[i])
+						int vbPointNum=0;
+
+						//for test.
+						/*cv::DMatch dm;
+						dm.imgIdx=0;
+						dm.queryIdx=dm.trainIdx=num++;
+						match1to2.push_back(dm);
+						keypoints1.push_back(FirstFrame->keypoints[MatchedPair->first]);
+						keypoints2.push_back(SecondFrame->keypoints[MatchedPair->second]);*/
+
+						mapData.insert(std::make_pair(&SecondFrame->keypoints[MatchedPair->second], &FirstFrame->keypoints[MatchedPair->first]));
+						if (vbTriangulated[vbPointNum])
 						{
 							MapPoint *mp = new MapPoint;
-							mp->Tw(0) = vP3D[i].x;
-							mp->Tw(1) = vP3D[i].y;
-							mp->Tw(2) = vP3D[i].z;
+							mp->Tw(0) = vP3D[vbPointNum].x;
+							mp->Tw(1) = vP3D[vbPointNum].y;
+							mp->Tw(2) = vP3D[vbPointNum].z;
 							mp->allObservation.insert(
-									std::make_pair(static_cast<KeyFrame *>(FirstFrame), &FirstFrame->keypoints[i]));
+									std::make_pair(static_cast<KeyFrame *>(FirstFrame), &FirstFrame->keypoints[MatchedPair->first]));
 							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame *>(SecondFrame),
-																	 &SecondFrame->keypoints[Match.MatchedPoints[i]]));
-							FirstFrame->mappoints[i] = mp;
-							SecondFrame->mappoints[Match.MatchedPoints[i]] = mp;
+																	 &SecondFrame->keypoints[MatchedPair->second]));
+							FirstFrame->mappoints[vbPointNum] = mp;
+							SecondFrame->mappoints[MatchedPair->second] = mp;
 							map->allMapPoint.push_back(mp);
+
+							//for test
+							/*file<<std::setprecision(9)<<vP3D[vbPointNum].x<<" "<<vP3D[vbPointNum].y<<" "<<vP3D[vbPointNum].z<<std::endl;
+							cv::DMatch dm;
+							dm.imgIdx=0;
+							dm.queryIdx=dm.trainIdx=num++;
+							match1to2.push_back(dm);
+							keypoints1.push_back(FirstFrame->keypoints[i]);
+							keypoints2.push_back(SecondFrame->keypoints[Match.MatchedPoints[i]]);*/
+
 						}
 						SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), mapData));
+						++vbPointNum;
 					}
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(FirstFrame));
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
 					lastFrame = SecondFrame;
 					mState = OK;
+
+					//for test
+					/*file.close();
+					cv::Mat out;
+					cv::drawMatches(FirstFrame->image, keypoints1, SecondFrame->image, keypoints2, match1to2, out);
+					imshow("matches", out);
+					cv::waitKey(0);*/
+
 					continue;
 				}
 			}

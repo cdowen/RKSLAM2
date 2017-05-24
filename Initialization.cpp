@@ -2,7 +2,8 @@
 #include <thread>
 #include <iostream>
 #include "tracking.h"
-std::string type2str(int type) {
+//return the type of opencv paraments.
+/*std::string type2str(int type) {
   std::string r;
 
   uchar depth = type & CV_MAT_DEPTH_MASK;
@@ -23,7 +24,7 @@ std::string type2str(int type) {
   r += (chans+'0');
 
   return r;
-}
+}*/
 
 Initialization::Initialization(Tracking* tracking, const Frame& ReferenceFrame, int iterations)
 {
@@ -33,7 +34,7 @@ Initialization::Initialization(Tracking* tracking, const Frame& ReferenceFrame, 
 }
 
 
-bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> MatchedPoints, cv::Mat R21, cv::Mat t21,std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated)
+bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated)
 {
   mvKeys2=CurrentFrame.keypoints;
   
@@ -55,7 +56,7 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> Mat
      threadE.join();
     // Compute ratio of scores
      float SCORE=SH/(SH+SE);
-      if(SCORE>0.5){return RecoverPoseH(H,R21,t21,vP3D,vbTriangulated,1.0,50);}
+      if(SCORE>0.4){return RecoverPoseH(H,R21,t21,vP3D,vbTriangulated,1.0,50);}
       else return RecoverPoseE(E,R21,t21,vP3D,vbTriangulated,1.0,50);
 
 }
@@ -64,7 +65,7 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> Mat
 //Compute Homography between source and destination planes. mvKeys1=H21*mvKeys2.
 void Initialization::FindHomography(float& score,cv::Mat& H21)
 {
-  H21=cv::findHomography(mMatchedKeys1,mMatchedKeys2,CV_RANSAC,3,InlierH);
+  H21=cv::findHomography(mMatchedKeys1,mMatchedKeys2,CV_RANSAC,5.991,InlierH);
   score=cv::countNonZero(InlierH);
   //std::cout<<"Homography is: "<<H21<<" type: "<<type2str(H21.type())<<std::endl;
   std::cout<<"The number of the inlier points using FindHomography is: "<<score<<std::endl;
@@ -73,7 +74,7 @@ void Initialization::FindHomography(float& score,cv::Mat& H21)
 //Compute Essential Mat from the corresponding points in two images. mvKeys2*E21*mvKeys1=0.
 void Initialization::FindEssentialMat(float& score, cv::Mat& E21)
 {
-  cv::Mat fundamental_matrix=cv::findFundamentalMat(mMatchedKeys1, mMatchedKeys2, CV_FM_RANSAC, 3., 0.99, InlierE);
+  cv::Mat fundamental_matrix=cv::findFundamentalMat(mMatchedKeys1, mMatchedKeys2, CV_FM_RANSAC, 3.841, 0.99, InlierE);
   score=cv::countNonZero(InlierE);
   std::cout<<"The number of the inlier points using FindEssentialMat is: "<<score<<std::endl;
   //std::cout<<"fundamental_matrix is: "<<fundamental_matrix<<std::endl;
@@ -82,7 +83,7 @@ void Initialization::FindEssentialMat(float& score, cv::Mat& E21)
 }
 
 //Recover pose(R21 t21)  and structure(vP3D vbTriangulated) from Homography.
-bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated, double minParallax, int minTriangulated)
+bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated, double minParallax, int minTriangulated)
 {
   std::cout<<"Initialize pose with recovery from Homography..."<<std::endl;
   
@@ -196,11 +197,11 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
     int secondBestGood = 0;    
     int bestSolutionIdx = -1;
     double bestParallax = -1;
-    std::vector<cv::Point3f> bestP3D;
+    std::vector<cv::Point3d> bestP3D;
     std::vector<bool> bestTriangulated;
     for (int i=0; i<8;i++)
     {
-      std::vector<cv::Point3f> mvP3D;
+      std::vector<cv::Point3d> mvP3D;
       std::vector<bool> mvTriangulated;
       double mvparallax;
       int nGood=CheckRT(vR[i], vt[i], InlierH, mvP3D, 4, mvTriangulated, mvparallax);
@@ -233,12 +234,14 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
     return false; 
 }
 
-bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated)
+bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated)
 {
    std::cout<<"Initialize pose with recovery from EssentialMat..."<<std::endl;
  
     cv::Mat R1, R2, t;
-    decomposeEssentialMat(EssentialMat, R1, R2, t);
+    //decomposeEssentialMat(EssentialMat, R1, R2, t);
+	DecomposeE(EssentialMat,R1,R2,t);
+
     //std::cout<<"R1="<<R1<<std::endl;
     //std::cout<<"R12="<<R2<<std::endl;
     //std::cout<<"t="<<t<<std::endl;
@@ -246,7 +249,7 @@ bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t
     cv::Mat t2=-t;
     
      // Reconstruct with the 4 hyphoteses and check
-    std::vector<cv::Point3f> vP3D1, vP3D2, vP3D3, vP3D4;
+    std::vector<cv::Point3d> vP3D1, vP3D2, vP3D3, vP3D4;
     std::vector<bool> vbTriangulated1,vbTriangulated2,vbTriangulated3, vbTriangulated4;
     double parallax1,parallax2, parallax3, parallax4;
 
@@ -334,7 +337,7 @@ bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t
 
 // Check R&t by computing triangulated points and its parallax. Return the number of visible 3Dpoints.
 // Maximum allowed reprojection error to treat a point pair as an inlier: 2 pixel.
-int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesInliers, std::vector<cv::Point3f> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax)
+int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesInliers, std::vector<cv::Point3d> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax)
 {
     // Calibration parameters
     const double fx = mK.at<double>(0,0);
@@ -420,7 +423,7 @@ int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesI
             continue;
 
         vCosParallax.push_back(cosParallax);
-        vP3D[i] = cv::Point3f(p3dC1.at<double>(0),p3dC1.at<double>(1),p3dC1.at<double>(2));
+        vP3D[i] = cv::Point3d(p3dC1.at<double>(0),p3dC1.at<double>(1),p3dC1.at<double>(2));
         nGood++;
 
         if(cosParallax<0.99998)
@@ -455,7 +458,7 @@ void Initialization::Triangulate(const cv::Point2f pt1, const cv::Point2f pt2, c
     x3D = x3D.rowRange(0,3)/x3D.at<double>(3);
 }
 
-void Initialization::decomposeEssentialMat(cv::InputArray _E, cv::OutputArray _R1, cv::OutputArray _R2, cv::OutputArray _t)
+/*void Initialization::decomposeEssentialMat(cv::InputArray _E, cv::OutputArray _R1, cv::OutputArray _R2, cv::OutputArray _t)
 {
   cv::Mat E = _E.getMat().reshape(1, 3);
   CV_Assert(E.cols == 3 && E.rows == 3);
@@ -477,5 +480,26 @@ void Initialization::decomposeEssentialMat(cv::InputArray _E, cv::OutputArray _R
   R1.copyTo(_R1);
   R2.copyTo(_R2);
   t.copyTo(_t);
-}
+}*/
 
+void Initialization::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
+{
+	cv::Mat u,w,vt;
+	cv::SVD::compute(E,w,u,vt);
+
+	u.col(2).copyTo(t);
+	t=t/cv::norm(t);
+
+	cv::Mat W(3,3,CV_64F,cv::Scalar(0));
+	W.at<double>(0,1)=-1;
+	W.at<double>(1,0)=1;
+	W.at<double>(2,2)=1;
+
+	R1 = u*W*vt;
+	if(cv::determinant(R1)<0)
+		R1=-R1;
+
+	R2 = u*W.t()*vt;
+	if(cv::determinant(R2)<0)
+		R2=-R2;
+}

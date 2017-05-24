@@ -11,7 +11,7 @@ class Initialization
 public:
   Initialization(Tracking* tracking, const Frame &ReferenceFrame, int iterations = 200);
   //bool Initialize(const Frame &CurrentFrame, std::map<int,int> MatchedPoints,cv::Mat &R21, cv::Mat &t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated);
-  bool Initialize(const Frame& CurrentFrame, std::map<int,int> MatchedPoints, cv::Mat R21, cv::Mat t21,std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated);
+  bool Initialize(const Frame& CurrentFrame, std::map<int,int> MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated);
 private:
   std::vector<cv::KeyPoint> mvKeys1; std::vector<cv::KeyPoint> mvKeys2;
   std::vector<cv::Point2f> mMatchedKeys1; std::vector<cv::Point2f> mMatchedKeys2;
@@ -28,17 +28,18 @@ private:
   
   //Recover pose(R21 t21)  and structure(vP3D vbTriangulated) from Homography.
   // International Journal of Pattern Recognition and Artificial Intelligence, 1988
-  bool RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated);
+  bool RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated);
   //Recover pose from EssentialMat.
-  bool RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated);
+  bool RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated);
   
   // Check R&t by computing triangulated points and its parallax. Return the number of visible 3Dpoints.
   // Maximum allowed reprojection error to treat a point pair as an inlier: 2 pixel.
-  int CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesInliers, std::vector<cv::Point3f> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax);
+  int CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesInliers, std::vector<cv::Point3d> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax);
   //Triangulate 3Dpoints
   void Triangulate(const cv::Point2f pt1, const cv::Point2f pt2, const cv::Mat P1, const cv::Mat P2, cv::Mat &x3D);
   //decompose EssentialMat for R and t.
   void decomposeEssentialMat(cv::InputArray _E, cv::OutputArray _R1, cv::OutputArray _R2, cv::OutputArray _t);
+	void DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t);
 };
 
 #endif//INITIALIZATION_H
