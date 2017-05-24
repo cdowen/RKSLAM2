@@ -4,11 +4,10 @@ set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}  ${CMAKE_SOURCE_DIR}/cmake_modules/ 
 set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
 
 find_package(CSparse REQUIRED)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 3 REQUIRED)
 find_package(G2O REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package (Threads)
-
 
 include_directories(${OpenCV_INCLUDE_DIRS} 
 ${G2O_INCLUDE_DIRS}
