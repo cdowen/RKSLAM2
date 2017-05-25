@@ -19,12 +19,28 @@ void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 
 void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 {
+	if (lastFrame == NULL||currFrame==NULL)
+	{
+		lastFrame = new Frame();
+		lastFrame->image = cv::imread("1.png", cv::IMREAD_GRAYSCALE);
+		currFrame = new Frame();
+		currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
+		cv::resize(lastFrame->image, lastFrame->sbiImg, cv::Size(40, 30));
+		cv::GaussianBlur(lastFrame->sbiImg, lastFrame->sbiImg, cv::Size(0, 0), 0.75);
+		cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40, 30));
+		cv::GaussianBlur(currFrame->sbiImg, currFrame->sbiImg, cv::Size(0,0), 0.75);
+	}
 	cv::Mat_<double> input, res;
 	input = cv::Mat(3, 1, CV_64FC1);
 	res = cv::Mat(3, 1, CV_64FC1);
 	if (a.empty())
 	{
-		a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		//a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		a = (cv::Mat_<double>(3,3)<<
+								  1.006182e+000, 2.459331e-003, 1.633217e-003,
+		6.525023e-004, 1.013484e+000, -3.232950e-003,
+					  -6.010459e-004, -2.420502e-002, 9.999996e-001);
+
 	}
 	cv::Mat &currImage = currFrame->image;
 	cv::Mat reM = cv::Mat(currImage.size(), CV_8UC1, cv::Scalar(0));
@@ -33,7 +49,11 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 		for (int j = 0; j < currImage.cols; j++)
 		{
 			input(0) = j;input(1) = i;input(2) = 1;
+			std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
 			res = a*input;
+			std::cout<<"before regulation:"<<res<<std::endl;
+			res = res/res(2);
+			std::cout<<"after regulation:"<<res<<std::endl;
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)
 			{
 				reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
