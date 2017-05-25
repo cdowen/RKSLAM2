@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 #include "matcher.h"
 #include "tracking.h"
+#include "Optimizer.h"
 
 // fr1 as the reference frame; project points in fr2 to fr1;
 void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
@@ -16,13 +17,15 @@ void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 	std::cout<<"matched points by H:"<<match_num<<"\n";
 }
 
-void testProjection(Frame* lastFrame, Frame* currFrame)
+void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 {
-	Tracking tr;
 	cv::Mat_<double> input, res;
 	input = cv::Mat(3, 1, CV_64FC1);
-	res = cv::Mat(3,1,CV_64FC1);
-	cv::Mat a = tr.ComputeHGlobalSBI(lastFrame, currFrame);
+	res = cv::Mat(3, 1, CV_64FC1);
+	if (a.empty())
+	{
+		a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+	}
 	cv::Mat &currImage = currFrame->image;
 	cv::Mat reM = cv::Mat(currImage.size(), CV_8UC1, cv::Scalar(0));
 	for (int i = 0; i < currImage.rows; i++)

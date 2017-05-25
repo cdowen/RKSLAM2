@@ -26,7 +26,7 @@ testsl3.cpp
 map.cpp
 Initialization.cpp
 ProjectionEdge.cpp
-LocalMap.cpp)
+LocalMap.cpp Optimizer.cpp Optimizer.h)
 
 if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
 target_link_libraries(rkslam2
