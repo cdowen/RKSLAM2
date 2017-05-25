@@ -27,11 +27,12 @@ float getPixelValuef(float x, float y, cv::Mat* image)
 Eigen::Vector3d EdgeSL3::homo_project()
 	{
 		Eigen::Vector3d hLoc;
-		hLoc << loc[0], loc[1], 1;
+		hLoc << loc[0]*16, loc[1]*16, 1;
 		const VertexSL3* v1 = static_cast<const VertexSL3*>(_vertices[0]);
 	
 		hLoc = v1->estimate()*hLoc;
-		hLoc[2] = 1;
+		hLoc = hLoc/hLoc[2];
+		hLoc = hLoc/16.0;
 		return hLoc;
 	}
 	void EdgeSL3::computeError()
@@ -75,8 +76,8 @@ Eigen::Vector3d EdgeSL3::homo_project()
 		_jacobianOplusXi[3] = -x1*ygrd;
 		_jacobianOplusXi[4] = -x2*ygrd;
 		_jacobianOplusXi[5] = -ygrd;
-		_jacobianOplusXi[6] = 0;
-		_jacobianOplusXi[7] = 0;
+		_jacobianOplusXi[6] = 16*x1*x1*xgrd+16*x1*x2*ygrd;
+		_jacobianOplusXi[7] = 16*x1*x2*xgrd+16*x2*x2*ygrd;
 		_jacobianOplusXi[8] = 1;
 	}
 
