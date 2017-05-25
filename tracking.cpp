@@ -147,9 +147,9 @@ void Tracking::Run(std::string pathtoData)
 							keypoints2.push_back(SecondFrame->keypoints[Match.MatchedPoints[i]]);*/
 
 						}
-						SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), mapData));
 						++vbPointNum;
 					}
+					SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), mapData));
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(FirstFrame));
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
 					lastFrame = SecondFrame;
