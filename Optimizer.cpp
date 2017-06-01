@@ -62,8 +62,8 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		e->setRobustKernel(rk);
 		rk->setDelta(thHuberDeltaI);
 
-		e->loc[0] = i%im1.size().width;
-		e->loc[1] = i/im1.size().width;
+		e->loc[0] = i%im1.size().width*16;
+		e->loc[1] = i/im1.size().width*16;
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;
 		e->_image = &im2;

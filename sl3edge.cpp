@@ -27,17 +27,17 @@ float getPixelValuef(float x, float y, cv::Mat* image)
 Eigen::Vector3d EdgeSL3::homo_project()
 	{
 		Eigen::Vector3d hLoc;
-		hLoc << loc[0]*16, loc[1]*16, 1;
+		hLoc << loc[0], loc[1], 1;
 		const VertexSL3* v1 = static_cast<const VertexSL3*>(_vertices[0]);
 	
 		hLoc = v1->estimate()*hLoc;
 		hLoc = hLoc/hLoc[2];
-		hLoc = hLoc/16.0;
 		return hLoc;
 	}
 	void EdgeSL3::computeError()
 	{
 		Eigen::Vector3d hLoc = homo_project();
+		hLoc = hLoc/16.0;
 		if (!validateProjection(hLoc, _image->size()))
 		{
 			isValid = false;
@@ -55,6 +55,7 @@ Eigen::Vector3d EdgeSL3::homo_project()
 	void EdgeSL3::linearizeOplus()
 	{
 		Eigen::Vector3d hLoc = homo_project();
+		hLoc = hLoc/16.0;
 		if (!validateProjection(hLoc, _image->size()))
 		{
 			for (int i = 0; i < 8; i++)
@@ -76,8 +77,8 @@ Eigen::Vector3d EdgeSL3::homo_project()
 		_jacobianOplusXi[3] = -x1*ygrd;
 		_jacobianOplusXi[4] = -x2*ygrd;
 		_jacobianOplusXi[5] = -ygrd;
-		_jacobianOplusXi[6] = 16*x1*x1*xgrd+16*x1*x2*ygrd;
-		_jacobianOplusXi[7] = 16*x1*x2*xgrd+16*x2*x2*ygrd;
+		_jacobianOplusXi[6] = x1*x1*xgrd+x1*x2*ygrd;
+		_jacobianOplusXi[7] = x1*x2*xgrd+x2*x2*ygrd;
 		_jacobianOplusXi[8] = 1;
 	}
 

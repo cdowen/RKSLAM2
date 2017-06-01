@@ -9,7 +9,7 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 		EdgeSL3(){};
 	cv::Mat* _image, *xgradient, *ygradient;
-	Eigen::Vector2i loc;
+	Eigen::Vector2d loc;
 
 	Eigen::Vector3d homo_project();
 	void computeError();
