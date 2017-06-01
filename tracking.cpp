@@ -3,18 +3,21 @@
 #include <Eigen/Sparse>
 #include "Map.h"
 #include <opencv2/core/eigen.hpp>
+#include "LocalMap.h"
 #include <math.h>
 #include <chrono>
 #include "Optimizer.h"
+#include <fstream>
 #include <iostream>
+#include <iomanip>
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
 
 void Tracking::Run(std::string pathtoData)
 {
 
 	//for test.
-	/*std::ofstream file;
-	file.open("file.txt");*/
+	std::ofstream file;
+	file.open("file.txt");
 
 	//Load Images.
 	std::vector<std::string> vstrImageFilenames;
@@ -24,7 +27,7 @@ void Tracking::Run(std::string pathtoData)
 
 	int nImages=vstrImageFilenames.size();
 
-	for(int ni=0;ni<nImages;ni++)
+	for(int ni=50;ni<nImages;ni++)
 	{
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
@@ -33,7 +36,13 @@ void Tracking::Run(std::string pathtoData)
 		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
 		fr->image = im;
 		fr->id = ni;
-		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold);
+		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold, true);
+		if(fr->keypoints.size()>nDesiredPoint)
+		{
+			cv::KeyPointsFilter::retainBest(fr->keypoints,nDesiredPoint);
+			fr->keypoints.resize(nDesiredPoint);
+		}
+		std::cout<<"The number of FAST: "<<fr->keypoints.size()<<std::endl;
 		fr->mappoints.reserve(fr->keypoints.size());
 		std::fill(fr->mappoints.begin(), fr->mappoints.end(), nullptr);
 		fr->timestamp = tframe;
@@ -48,20 +57,12 @@ void Tracking::Run(std::string pathtoData)
 				{
 					Initializer = new Initialization(this, *fr, 2000);
 					FirstFrame = fr;
-					//ReInitialForce=0;
-					std::cout << ni << "th(" << std::setprecision(16) << tframe
+					std::cout << ni << "th(" <<std::setprecision(16) << tframe
 							  << ") image is selected as FirstFrame!\n";
 				}
 			} else
 			{
 				std::cout << ni << "th(" << std::setprecision(16) << tframe << ") image is selected as SecondFrame!\n";
-				/*ReInitialForce++;
-				if (ReInitialForce>10)
-				{
-					delete Initializer;
-					Initializer = nullptr;
-					continue;
-				}*/
 				if (fr->keypoints.size() < 100)
 				{
 					delete Initializer;
@@ -73,14 +74,38 @@ void Tracking::Run(std::string pathtoData)
 
 				std::vector<cv::KeyPoint> kp1, kp2;
 
+				//for test.
+				std::vector<cv::DMatch>match1to2;
+				std::vector<cv::KeyPoint>keypoints1={};
+				std::vector<cv::KeyPoint>keypoints2={};
+
 				std::cout<<"Match "<<Match.SearchForInitialization(FirstFrame,fr)<<" points.\n";
-				if (Match.SearchForInitialization(FirstFrame, fr) < 100)
+
+
+				if (Match.SearchForInitialization(FirstFrame, fr) < 10)
 				{
 					delete Initializer;
 					Initializer = nullptr;
 					continue;
 				}
 				SecondFrame = fr;
+
+				//for test.
+				/*int num=0;
+				for (std::map<int,int>::iterator MatchedPair=Match.MatchedPoints.begin();MatchedPair!=Match.MatchedPoints.end();++MatchedPair)
+				{
+					cv::DMatch dm;
+					dm.imgIdx=0;
+					dm.queryIdx=dm.trainIdx=num++;
+					match1to2.push_back(dm);
+					keypoints1.push_back(FirstFrame->keypoints[MatchedPair->first]);
+					keypoints2.push_back(SecondFrame->keypoints[MatchedPair->second]);
+				}
+				cv::Mat out;
+				cv::drawMatches(FirstFrame->image, keypoints1, SecondFrame->image, keypoints2, match1to2, out);
+				imshow("matches", out);
+				cv::waitKey(0);*/
+
 				//KeyFrame *debug_kf = static_cast<KeyFrame *>(currFrame);
 				//assert(debug_kf->sbiImg.size().height == 30 && debug_kf->sbiImg.size().width == 40);
 				cv::Mat R21;
@@ -138,13 +163,7 @@ void Tracking::Run(std::string pathtoData)
 							map->allMapPoint.push_back(mp);
 
 							//for test
-							/*file<<std::setprecision(9)<<vP3D[vbPointNum].x<<" "<<vP3D[vbPointNum].y<<" "<<vP3D[vbPointNum].z<<std::endl;
-							cv::DMatch dm;
-							dm.imgIdx=0;
-							dm.queryIdx=dm.trainIdx=num++;
-							match1to2.push_back(dm);
-							keypoints1.push_back(FirstFrame->keypoints[i]);
-							keypoints2.push_back(SecondFrame->keypoints[Match.MatchedPoints[i]]);*/
+							file<<std::setprecision(9)<<vP3D[vbPointNum].x<<" "<<vP3D[vbPointNum].y<<" "<<vP3D[vbPointNum].z<<std::endl;
 
 						}
 						++vbPointNum;
@@ -156,8 +175,8 @@ void Tracking::Run(std::string pathtoData)
 					mState = OK;
 
 					//for test
-					/*file.close();
-					cv::Mat out;
+					file.close();
+					/*cv::Mat out;
 					cv::drawMatches(FirstFrame->image, keypoints1, SecondFrame->image, keypoints2, match1to2, out);
 					imshow("matches", out);
 					cv::waitKey(0);*/
@@ -168,6 +187,7 @@ void Tracking::Run(std::string pathtoData)
 		}
 			if(mState==OK)
 			{
+				break;
 				std::cout<<"Tracking..."<<std::endl;
 				Map* map = Map::getInstance();
 				auto kf = map->allKeyFrame.back();
@@ -235,6 +255,11 @@ void Tracking::Run(std::string pathtoData)
 				//getchar();
 			}
 		}
+	//Local Mapping.
+
+
+
+
 	}
 
 // search for x most overlapping keyframe with last frame.

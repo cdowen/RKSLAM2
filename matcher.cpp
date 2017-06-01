@@ -5,7 +5,6 @@ int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 {
 	MatchedPoints.clear();
 	int Matched_num = 0;
-	int num=0;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp1 = fr1->keypoints.at(i);
@@ -26,9 +25,30 @@ int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 				}
 			}
 		}
-		if (Matched_id > -1){
-			MatchedPoints[i] = Matched_id;
-			Matched_num++;
+		if (Matched_id>-1)
+		{
+			// also find backwards in a married-matches check.
+			x=fr2->keypoints.at(Matched_id).pt.x;
+			y=fr2->keypoints.at(Matched_id).pt.y;
+			min_SSD_error=SSD_error_th; int Back_Matched_id=-1;
+			for (int j = 0; j <fr1->keypoints.size() ; ++j)
+			{
+				cv::KeyPoint back_kp1=fr1->keypoints.at(j);
+				if (abs(back_kp1.pt.x-x)<InitSearchHalfLength&&abs(back_kp1.pt.y-y)<InitSearchHalfLength)
+				{
+					int Back_SSD_error=SSDcompute(fr2,fr1,fr2->keypoints.at(Matched_id),back_kp1);
+					if(Back_SSD_error<min_SSD_error)
+					{
+						min_SSD_error=Back_SSD_error;
+						Back_Matched_id=j;
+					}
+				}
+			}
+			if (pow(fr1->keypoints[i].pt.x-fr1->keypoints[Back_Matched_id].pt.x,2)+pow(fr1->keypoints[i].pt.y-fr1->keypoints[Back_Matched_id].pt.y,2)<=4)
+			{
+				MatchedPoints[i] = Matched_id;
+				Matched_num++;
+			}
 		}
 	}
 
@@ -49,12 +69,6 @@ int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint k
 	{
 		cv::Mat fr1_Range = fr1->image.colRange(x1 - patchHalfSize, x1 + patchHalfSize+1).rowRange(y1 - patchHalfSize, y1 + patchHalfSize+1);
 		cv::Mat fr2_Range = fr1->image.colRange(x2 - patchHalfSize, x2 + patchHalfSize+1).rowRange(y2 - patchHalfSize, y2 + patchHalfSize+1);
-
-		//Improve the SSD method by substracting the mean of patch.
-		/*cv::Mat Mean1(7,7,CV_8UC1,cv::Scalar::all(-cv::mean(fr1_Range).val[0]));
-		cv::add(fr1_Range,Mean1,fr1_Range);
-		cv::Mat Mean2(7,7,CV_8UC1,cv::Scalar::all(-cv::mean(fr2_Range).val[0]));
-		cv::add(fr2_Range,Mean2,fr2_Range);*/
 
 		cv::Mat differ = fr1_Range - fr2_Range;
 		return (int)differ.dot(differ);

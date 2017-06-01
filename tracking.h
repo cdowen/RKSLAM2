@@ -32,6 +32,6 @@ private:
 	Initialization* Initializer;
 	Frame* FirstFrame;
 	Frame* SecondFrame;
-	int ReInitialForce;
+	int nDesiredPoint=1000;
 };
 #endif

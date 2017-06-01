@@ -28,6 +28,9 @@
 
 Initialization::Initialization(Tracking* tracking, const Frame& ReferenceFrame, int iterations)
 {
+  //for test.
+    _ReferenceFrame=ReferenceFrame.image;
+
   mvKeys1=ReferenceFrame.keypoints;
   mK=tracking->mK;
   MaxIterations=iterations;
@@ -54,10 +57,41 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> Mat
      std::thread threadE(&Initialization::FindEssentialMat,this,std::ref(SE), std::ref(E));
      threadH.join();
      threadE.join();
+
+    //for test.
+    /*cv::Mat ProjectedFrame=cv::Mat(CurrentFrame.image.size(),CV_8UC1,cv::Scalar(0));
+    cv::Mat_<double> point=cv::Mat(3,1,CV_64FC1);
+    cv::Mat_<double> result=cv::Mat(3,1,CV_64FC1);
+    for (int intx = 0; intx <CurrentFrame.image.cols ; ++intx)
+    {
+        for (int inty = 0; inty <CurrentFrame.image.rows ; ++inty)
+        {
+            point(0)=intx;point(1)=inty;point(2)=1;
+            result=H*point;
+            result=result/result(2);
+            if (result(0)>0&&result(0)<CurrentFrame.image.size().width&&result(1)>0&&result(1)<CurrentFrame.image.size().height)
+            {
+                ProjectedFrame.at<uint8_t>(result(1),result(0))=_ReferenceFrame.at<uint8_t>(inty,intx);
+            }
+        }
+    }
+
+    cv::Mat resultImg;
+    cv::addWeighted(CurrentFrame.image,0.5,ProjectedFrame,0.5,0.5,resultImg);
+    cv::imshow("Project_Result",ProjectedFrame);
+    cv::imshow("CurrentFrme",CurrentFrame.image);
+    cv::imshow("ReferenceFrame",_ReferenceFrame);
+    cv::Mat differ;
+    cv::absdiff(ProjectedFrame, CurrentFrame.image, differ);
+    differ = differ&(ProjectedFrame!=0);
+    double error = differ.dot(differ);
+    std::cout<<error/1200<<"\n";
+    cv::waitKey(0);*/
+
     // Compute ratio of scores
      float SCORE=SH/(SH+SE);
-      if(SCORE>0.4){return RecoverPoseH(H,R21,t21,vP3D,vbTriangulated,1.0,50);}
-      else return RecoverPoseE(E,R21,t21,vP3D,vbTriangulated,1.0,50);
+      if(SCORE>0.4){return RecoverPoseH(H,R21,t21,vP3D,vbTriangulated,1.0,10);}
+      else return RecoverPoseE(E,R21,t21,vP3D,vbTriangulated,1.0,10);
 
 }
 
@@ -205,7 +239,7 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
       std::vector<bool> mvTriangulated;
       double mvparallax;
       int nGood=CheckRT(vR[i], vt[i], InlierH, mvP3D, 4, mvTriangulated, mvparallax);
-      //std::cout<<"nGood: "<<nGood<<" points."<<std::endl;
+      std::cout<<"nGood: "<<nGood<<" points."<<std::endl;
        if(nGood>bestGood)
         {
             secondBestGood = bestGood;
@@ -220,8 +254,8 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
             secondBestGood = nGood;
         }   
     }
-    //std::cout<<"best Rt : "<<bestGood<<" points."<<std::endl;
-    //std::cout<<"Second Rt "<<secondBestGood<<" points."<<std::endl;
+    std::cout<<"best Rt : "<<bestGood<<" points."<<std::endl;
+    std::cout<<"Second Rt "<<secondBestGood<<" points."<<std::endl;
     if(secondBestGood<0.75*bestGood && bestParallax>=minParallax && bestGood>minTriangulated && bestGood>0.9*cv::countNonZero(InlierH))
     {
         vR[bestSolutionIdx].copyTo(R21);
