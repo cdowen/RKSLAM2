@@ -6,6 +6,7 @@
 #include "matcher.h"
 #include "tracking.h"
 #include "Optimizer.h"
+#include <opencv2/xfeatures2d.hpp>
 
 // fr1 as the reference frame; project points in fr2 to fr1;
 void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
@@ -36,10 +37,16 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 	if (a.empty())
 	{
 		a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		// real answer
 		//a = (cv::Mat_<double>(3,3)<<
 		//						  1.006182e+000, 2.459331e-003, 1.633217e-003,
 		//6.525023e-004, 1.013484e+000, -3.232950e-003,
 		//			  -6.010459e-004, -2.420502e-002, 9.999996e-001);
+		// for Shen Chenlong
+		//a = (cv::Mat_<double>(3,3)<<
+		//						  1.160721381656755, -0.008292699626746215, -40.02850611710956,
+		//0.03435974520788249, 1.024597816043882, -13.14882445942777,
+		//6.140997224529456e-05, 2.661706740529356e-06, 1);
 
 	}
 	cv::Mat &currImage = currFrame->image;
@@ -71,4 +78,72 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 	double error = differ.dot(differ);
 	std::cout<<error/1200<<"\n";
 	cv::waitKey(0);
+}
+
+void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches)
+{
+	int tmpd;
+	std::vector<cv::DMatch> dm;
+	std::vector<cv::KeyPoint> kp1, kp2;
+	for (auto it = matches.begin(); it != matches.end(); ++it)
+	{
+		cv::DMatch tmp;
+		tmp.imgIdx = 0;
+		tmp.trainIdx = tmp.queryIdx = tmpd;
+		dm.push_back(tmp);
+		kp1.push_back(*it->second);
+		kp2.push_back(*it->first);
+		tmpd++;
+	}
+	cv::Mat out;
+	cv::drawMatches(lastFrame->image, kp1, currFrame->image, kp2, dm, out);
+	imshow("matches", out);
+	cv::waitKey(0);
+}
+
+void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches)
+{
+	std::vector<cv::Point2f> kp1, kp2;
+	for (auto it = matches.begin();it!=matches.end();it++)
+	{
+		kp1.push_back(it->second->pt);
+		kp2.push_back(it->first->pt);
+	}
+	cv::Mat H = cv::findHomography(kp1, kp2, 0);
+	testProjection(lastFrame, currFrame, H);
+}
+
+void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame)
+{
+	//cv::xfeatures2d::SIFT sift;
+	cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create();
+	cv::Mat desc1, desc2, mask;
+	std::vector<cv::KeyPoint> kp1, kp2, skp1, skp2;
+	sift->detectAndCompute(lastFrame->image, cv::noArray(), kp1, desc1);
+	sift->detectAndCompute(currFrame->image, cv::noArray(), kp2, desc2);
+	cv::BFMatcher matcher;
+	std::vector<cv::DMatch> dMatches;
+	matcher.match(desc1, desc2, dMatches, cv::noArray());
+	double max_dist = 0; double min_dist = 100;
+	for( int i = 0; i < desc1.rows; i++ )
+	{ double dist = dMatches[i].distance;
+		if( dist < min_dist ) min_dist = dist;
+		if( dist > max_dist ) max_dist = dist;
+	}
+	std::map<cv::KeyPoint*, cv::KeyPoint*> good_matches;
+	std::vector<cv::DMatch> good_matches2;
+
+	for( int i = 0; i < desc1.rows; i++ )
+	{
+		if( dMatches[i].distance <= std::max(2*min_dist, 0.02) )
+		{
+			good_matches2.push_back(dMatches[i]);
+			good_matches.insert(std::make_pair(&kp2[dMatches[i].trainIdx], &kp1[dMatches[i].queryIdx]));
+		}
+	}
+	//cv::Mat out;
+	//cv::drawMatches(lastFrame->image, kp1, currFrame->image, kp2, good_matches2, out);
+
+	drawMatch(lastFrame, currFrame, good_matches);
+	drawProjection(lastFrame, currFrame, good_matches);
 }

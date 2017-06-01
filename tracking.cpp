@@ -174,7 +174,7 @@ void Tracking::Run(std::string pathtoData)
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
 				std::map<KeyFrame*, cv::Mat> khs;
-				void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a);
+				void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat());
 				for (int i = 0;i<kfs.size();i++)
 				{
 					cv::Mat b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
@@ -182,7 +182,12 @@ void Tracking::Run(std::string pathtoData)
 					khs.insert(std::make_pair(kfs[i], c));
 				}
 				Matcher match;
+				void testMatchHomo(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
+				void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame);
+				//testMatchHomo(lastFrame, currFrame, currFrame->matchedGroup[static_cast<KeyFrame*>(lastFrame)]);
 				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
+				testProjection(khs.begin()->first, currFrame);
+				findCorespondenceByKp(khs.begin()->first, currFrame);
 				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
 
 				/*

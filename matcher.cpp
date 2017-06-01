@@ -63,12 +63,14 @@ int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint k
 
 int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH)
 {
+	int count = 0;
 	for (auto i = globalH.begin();i!=globalH.end(); i++)
 	{
 		auto tmpd = matchByH(i->first, fr1, i->second);
 		fr1->matchedGroup.insert(std::make_pair(i->first, tmpd));
+		count+=tmpd.size();
 	}
-	return fr1->matchedGroup.size();
+	return count;
 }
 
 // Find corresponding feature points in two frames with homography
@@ -90,6 +92,7 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 		ppl = H*kpl;
 		ppl = ppl/ppl(2);
 		cv::Mat_<uint8_t> warped(patchHalfSize * 2, patchHalfSize * 2, uint8_t(0));
+		int warpedSize = 0;
 		//calculate warped patch.
 		for (int ii = -patchHalfSize; ii < patchHalfSize; ii++)
 		{
@@ -107,7 +110,13 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 				}
 			}
 		}
-		int min_SSD_error = SSD_error_th;
+		// image warp failed;
+		warpedSize = cv::countNonZero(warped);
+		if (warpedSize==0)
+		{
+			continue;
+		}
+		int min_SSD_error = SSD_error_avg;
 		cv::KeyPoint* matchedKp = nullptr;
 		// iterate to find the smallest error in fr2.
 		cv::Mat differ;
@@ -125,6 +134,7 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 				cv::absdiff(warped, patch, differ);
 				differ = differ&(warped!=0);
 				int ssdError = differ.dot(differ);
+				ssdError = ssdError/warpedSize;
 				if (ssdError < min_SSD_error)
 				{
 					matchedKp = &(fr2->keypoints[j]);

@@ -46,7 +46,7 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
 	action->setGainThreshold(0.001);
-	action->setMaxIterations(10);
+	action->setMaxIterations(20);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -121,7 +121,7 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
 	action->setGainThreshold(0.00001);
-	action->setMaxIterations(10);
+	action->setMaxIterations(20);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
