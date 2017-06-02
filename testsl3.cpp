@@ -57,16 +57,19 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 		{
 			input(0) = j;input(1) = i;input(2) = 1;
 			//std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
-			res = a*input;
+			//res = a*input;
+			res = a.inv()*input;
 			//std::cout<<"before regulation:"<<res<<std::endl;
 			res = res/res(2);
 			//std::cout<<"after regulation:"<<res<<std::endl;
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)
 			{
-				reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
+				//reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
+				reM.at<uint8_t>(i,j) =lastFrame->image.at<uint8_t>(res(1), res(0));
 			}
 		}
 	}
+	cv::imshow("original frame", lastFrame->image);
 	cv::imshow("result", reM);
 	cv::imshow("second frame", currImage);
 	cv::Mat resultImg;
@@ -113,7 +116,7 @@ void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, 
 	testProjection(lastFrame, currFrame, H);
 }
 
-void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame)
+void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame)
 {
 	//cv::xfeatures2d::SIFT sift;
 	cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create();
@@ -143,7 +146,8 @@ void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame)
 	}
 	//cv::Mat out;
 	//cv::drawMatches(lastFrame->image, kp1, currFrame->image, kp2, good_matches2, out);
-
+	//cv::imshow("Opencv Match", out);
+	//cv::waitKey(0);
 	drawMatch(lastFrame, currFrame, good_matches);
 	drawProjection(lastFrame, currFrame, good_matches);
 }
