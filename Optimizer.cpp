@@ -74,8 +74,6 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	solver->setWriteDebug(true);
 	optimizer.initializeOptimization();
 	cv::Mat result;
-	//for (int i = 0; i < 200; i++)
-	//{
 	int validCount = 0;
 	optimizer.optimize(50);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
@@ -138,8 +136,8 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		rk->setDelta(thHuberDeltaI);
 		e->setRobustKernel(rk);
 
-		e->loc[0] = i%im1.size().width;
-		e->loc[1] = i/im1.size().width;
+		e->loc[0] = i%im1.size().width*16;
+		e->loc[1] = i/im1.size().width*16;
 		e->_image = &im2;
 		e->xgradient = &xgradient;
 		e->ygradient = &ygradient;

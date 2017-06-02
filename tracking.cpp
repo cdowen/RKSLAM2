@@ -18,7 +18,9 @@ void Tracking::Run(std::string pathtoData)
 	//for test.
 	std::ofstream file;
 	file.open("file.txt");
-
+	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
+	void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat());
+	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame);
 	//Load Images.
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
@@ -125,27 +127,12 @@ void Tracking::Run(std::string pathtoData)
 					SecondFrame->mTcw.colRange(0,3).rowRange(0,3)=R21;
 					SecondFrame->mTcw.colRange(0,3).row(3)=t21;
 
-					//for test.
-					/*file<<std::setprecision(9)<<R21<<t21<<std::endl;
-					std::vector<cv::DMatch>match1to2;
-					std::vector<cv::KeyPoint>keypoints1={};
-					std::vector<cv::KeyPoint>keypoints2={};
-					int num=0;*/
-
 					// store points in keyframe
 					Map *map = Map::getInstance();
 					std::map<cv::KeyPoint*, cv::KeyPoint*> mapData;
 					for (std::map<int,int>::iterator MatchedPair=Match.MatchedPoints.begin();MatchedPair!=Match.MatchedPoints.end();++MatchedPair)
 					{
 						int vbPointNum=0;
-
-						//for test.
-						/*cv::DMatch dm;
-						dm.imgIdx=0;
-						dm.queryIdx=dm.trainIdx=num++;
-						match1to2.push_back(dm);
-						keypoints1.push_back(FirstFrame->keypoints[MatchedPair->first]);
-						keypoints2.push_back(SecondFrame->keypoints[MatchedPair->second]);*/
 
 						mapData.insert(std::make_pair(&SecondFrame->keypoints[MatchedPair->second], &FirstFrame->keypoints[MatchedPair->first]));
 						if (vbTriangulated[vbPointNum])
@@ -173,7 +160,9 @@ void Tracking::Run(std::string pathtoData)
 					map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
 					lastFrame = SecondFrame;
 					mState = OK;
-
+					//drawMatch(FirstFrame, SecondFrame, mapData);
+					//void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame);
+					//findCorrespondenceByKp(lastFrame, currFrame);
 					//for test
 					file.close();
 					/*cv::Mat out;
@@ -187,28 +176,36 @@ void Tracking::Run(std::string pathtoData)
 		}
 			if(mState==OK)
 			{
-				break;
 				std::cout<<"Tracking..."<<std::endl;
 				Map* map = Map::getInstance();
 				auto kf = map->allKeyFrame.back();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+				testProjection(lastFrame,currFrame, a);
+				findCorrespondenceByKp(lastFrame, currFrame);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
 				std::map<KeyFrame*, cv::Mat> khs;
-				void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat());
+
 				for (int i = 0;i<kfs.size();i++)
 				{
 					cv::Mat b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
+					//testProjection(kfs[i], lastFrame, b);
+					//findCorrespondenceByKp(kfs[i], lastFrame);
+					void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
+					//drawMatch(kfs[i], lastFrame, lastFrame->matchedGroup[kfs[i]]);
 					cv::Mat c = b*a;
 					khs.insert(std::make_pair(kfs[i], c));
 				}
 				Matcher match;
-				void testMatchHomo(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
-				void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame);
-				//testMatchHomo(lastFrame, currFrame, currFrame->matchedGroup[static_cast<KeyFrame*>(lastFrame)]);
 				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
-				testProjection(khs.begin()->first, currFrame);
-				findCorespondenceByKp(khs.begin()->first, currFrame);
 				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
+
+				//void testMatchHomo(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
+				//void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame);
+				//testMatchHomo(lastFrame, currFrame, currFrame->matchedGroup[static_cast<KeyFrame*>(lastFrame)]);
+				//std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
+				//testProjection(khs.begin()->first, currFrame);
+				//findCorespondenceByKp(khs.begin()->first, currFrame);
+				//std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
 
 				/*
 				// match with direct alignment.

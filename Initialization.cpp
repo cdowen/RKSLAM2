@@ -37,7 +37,7 @@ Initialization::Initialization(Tracking* tracking, const Frame& ReferenceFrame, 
 }
 
 
-bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated)
+bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated)
 {
   mvKeys2=CurrentFrame.keypoints;
   
@@ -90,8 +90,31 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int> Mat
 
     // Compute ratio of scores
      float SCORE=SH/(SH+SE);
-      if(SCORE>0.4){return RecoverPoseH(H,R21,t21,vP3D,vbTriangulated,1.0,10);}
-      else return RecoverPoseE(E,R21,t21,vP3D,vbTriangulated,1.0,10);
+      if(SCORE>0.4)
+      {
+          std::map<int,int> MaskMatchedPoints={};
+          auto it = MatchedPoints.begin();
+          for (int i = 0; i <MatchedPoints.size() ; ++i)
+          {
+              if (InlierH.at<uint8_t>(i)==0)continue;
+              else MaskMatchedPoints.insert(*it);
+              it++;
+          }
+          MatchedPoints = MaskMatchedPoints;
+          return RecoverPoseH(H,R21,t21,vP3D,vbTriangulated,1.0,10);
+      }
+      else{
+          std::map<int,int> MaskMatchedPoints={};
+          auto it = MatchedPoints.begin();
+          for (int i = 0; i <MatchedPoints.size() ; ++i)
+          {
+              if (InlierE.at<uint8_t>(i)==0)continue;
+              else MaskMatchedPoints.insert(*it);
+              it++;
+          }
+          MatchedPoints = MaskMatchedPoints;
+          return RecoverPoseE(E,R21,t21,vP3D,vbTriangulated,1.0,10);
+      }
 
 }
 
