@@ -8,7 +8,7 @@ class EdgeProjection :public g2o::BaseUnaryEdge < 2, Eigen::Vector2d, VertexSL3 
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	Eigen::Vector2i loc;
+	Eigen::Vector2d loc;
 	EdgeProjection(){};
 	void computeError();
 	void linearizeOplus();
