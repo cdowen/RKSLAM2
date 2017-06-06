@@ -71,14 +71,21 @@ Eigen::Vector3d EdgeSL3::homo_project()
 		float x1 = loc[0];
 		float x2 = loc[1];
 
-		_jacobianOplusXi[0] = -x1*xgrd;
-		_jacobianOplusXi[1] = -x2*xgrd;
-		_jacobianOplusXi[2] = -xgrd;
-		_jacobianOplusXi[3] = -x1*ygrd;
-		_jacobianOplusXi[4] = -x2*ygrd;
-		_jacobianOplusXi[5] = -ygrd;
-		_jacobianOplusXi[6] = x1*x1*xgrd+x1*x2*ygrd;
-		_jacobianOplusXi[7] = x1*x2*xgrd+x2*x2*ygrd;
+		const VertexSL3* v1 = static_cast<const VertexSL3*>(_vertices[0]);
+		const Eigen::Matrix3d h = v1->estimate();
+		double ww = h(2, 0)*loc[0]+h(2,1)*loc[1]+1;
+		ww = fabs(ww) > DBL_EPSILON ? 1./ww : 0;
+		double xi = (h(0,0)*loc[0]+h(0,1)*loc[1]+h(0,2))*ww;
+		double yi = (h(1,0)*loc[0]+h(1,1)*loc[1]+h(1,2))*ww;
+
+		_jacobianOplusXi[0] = -x1*xgrd*ww;
+		_jacobianOplusXi[1] = -x2*xgrd*ww;
+		_jacobianOplusXi[2] = -xgrd*ww;
+		_jacobianOplusXi[3] = -x1*ygrd*ww;
+		_jacobianOplusXi[4] = -x2*ygrd*ww;
+		_jacobianOplusXi[5] = -ygrd*ww;
+		_jacobianOplusXi[6] = x1*xi*xgrd*ww+x1*yi*ygrd*ww;
+		_jacobianOplusXi[7] = x2*xi*xgrd*ww+x2*yi*ygrd*ww;
 		_jacobianOplusXi[8] = 1;
 	}
 

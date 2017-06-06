@@ -46,7 +46,7 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
 	action->setGainThreshold(0.001);
-	action->setMaxIterations(20);
+	action->setMaxIterations(100);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -56,7 +56,7 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	for (int i = 0; i < im1.size().height*im1.size().width; i++)
 	{
 		EdgeSL3* e = new EdgeSL3();
-		e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
+		e->setVertex(0, optimizer.vertex(0));
 		e->setMeasurement(*(im1.data + i));
 		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
 		e->setRobustKernel(rk);
@@ -75,7 +75,7 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	optimizer.initializeOptimization();
 	cv::Mat result;
 	int validCount = 0;
-	optimizer.optimize(50);
+	optimizer.optimize(300);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
 	cv::eigen2cv(sl3d->estimate(), result);
 	std::cout << result << "\n";
@@ -144,7 +144,6 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
-
 	auto it = fr2->matchedGroup.find(kf);
 	// Must be in its overlapping set.
 	assert(it != fr2->matchedGroup.end());
