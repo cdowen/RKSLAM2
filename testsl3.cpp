@@ -112,19 +112,20 @@ void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, 
 		kp1.push_back(it->second->pt);
 		kp2.push_back(it->first->pt);
 	}
-	cv::Mat H = cv::findHomography(kp1, kp2, 0);
+	cv::Mat mask;
+	cv::Mat H = cv::findHomography(kp1, kp2, cv::RANSAC, 2, mask);
 	testProjection(lastFrame, currFrame, H);
 }
 
-void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame)
+void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*>& matches)
 {
-	//cv::xfeatures2d::SIFT sift;
 	cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create();
-	cv::Mat desc1, desc2, mask;
-	std::vector<cv::KeyPoint> kp1, kp2, skp1, skp2;
-	sift->detectAndCompute(lastFrame->image, cv::noArray(), kp1, desc1);
-	sift->detectAndCompute(currFrame->image, cv::noArray(), kp2, desc2);
-	cv::BFMatcher matcher;
+	cv::Mat desc1, desc2;
+	sift->detectAndCompute(lastFrame->image, cv::noArray(), lastFrame->keypoints, desc1);
+	sift->detectAndCompute(currFrame->image, cv::noArray(), currFrame->keypoints, desc2);
+	std::vector<cv::KeyPoint>& kp1 = lastFrame->keypoints;
+	std::vector<cv::KeyPoint>& kp2 = currFrame->keypoints;
+	cv::FlannBasedMatcher matcher;
 	std::vector<cv::DMatch> dMatches;
 	matcher.match(desc1, desc2, dMatches, cv::noArray());
 	double max_dist = 0; double min_dist = 100;
@@ -138,16 +139,29 @@ void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame)
 
 	for( int i = 0; i < desc1.rows; i++ )
 	{
-		if( dMatches[i].distance <= std::max(2*min_dist, 0.02) )
+		if( dMatches[i].distance <= std::max(3*min_dist, 0.02) )
 		{
 			good_matches2.push_back(dMatches[i]);
 			good_matches.insert(std::make_pair(&kp2[dMatches[i].trainIdx], &kp1[dMatches[i].queryIdx]));
 		}
 	}
-	//cv::Mat out;
-	//cv::drawMatches(lastFrame->image, kp1, currFrame->image, kp2, good_matches2, out);
-	//cv::imshow("Opencv Match", out);
-	//cv::waitKey(0);
-	drawMatch(lastFrame, currFrame, good_matches);
-	drawProjection(lastFrame, currFrame, good_matches);
+
+	std::vector<cv::Point2f> kpp1, kpp2;
+	for (auto it = good_matches.begin();it!=good_matches.end();it++)
+	{
+		kpp1.push_back(it->second->pt);
+		kpp2.push_back(it->first->pt);
+	}
+	cv::Mat mask;
+	cv::Mat H = cv::findHomography(kpp1, kpp2, cv::RANSAC, 1, mask);
+	auto iter = good_matches.begin();
+	for (int i = 0;i<mask.rows*mask.cols;i++)
+	{
+		if (mask.at<uint8_t>(i)==1)
+		{
+			matches.insert(std::make_pair(iter->first, iter->second));
+		}
+		iter++;
+	}
+	std::cout<<"before filter:"<<good_matches.size()<<" after filter:"<<matches.size()<<"\n";
 }
