@@ -150,8 +150,8 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	Eigen::Vector2d kpmea;
 	for (auto it2 = it->second.begin();it2!=it->second.end();it2++)
 	{
-		kpmea[0] = it2->first->pt.x;
-		kpmea[1] = it2->first->pt.y;
+		kpmea[0] = fr2->keypoints[it2->first].pt.x;
+		kpmea[1] = fr2->keypoints[it2->first].pt.y;
 		EdgeProjection *e = new EdgeProjection();
 		e->setVertex(0, optimizer.vertex(0));
 		e->setMeasurement(kpmea);
@@ -159,8 +159,8 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		rk->setDelta(thHuberDeltaX);
 		e->setRobustKernel(rk);
 
-		e->loc[0] = it2->second->pt.x;
-		e->loc[1] = it2->second->pt.y;
+		e->loc[0] = kf->keypoints[it2->second].pt.x;
+		e->loc[1] = kf->keypoints[it2->second].pt.y;
 		e->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
 		optimizer.addEdge(e);
 	}

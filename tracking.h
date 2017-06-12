@@ -30,8 +30,14 @@ private:
 					std::vector<double> &vTimestamps);
 	//For Initialization
 	Initialization* Initializer;
+	Initialization* DeltaInitializer;//Delta_H
 	Frame* FirstFrame;
 	Frame* SecondFrame;
+	Frame* LastFrame;//Delta_H
 	int nDesiredPoint=1000;
+	cv::Mat IterateH=cv::Mat::eye(3,3,CV_64FC1);//Delta_H
+	int PyramidLevel=5;//LK
+	const int cell_size=30;
+	int ShiTScore_Threshold=20;
 };
 #endif

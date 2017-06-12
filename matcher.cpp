@@ -1,10 +1,9 @@
 #include "matcher.h"
 #include <stdint.h>
 #include "KeyFrame.h"
-int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
+std::map<int,int> Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 {
-	MatchedPoints.clear();
-	int Matched_num = 0;
+	std::map<int,int> MatchedPoints={};
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp1 = fr1->keypoints.at(i);
@@ -47,12 +46,11 @@ int Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 			if (pow(fr1->keypoints[i].pt.x-fr1->keypoints[Back_Matched_id].pt.x,2)+pow(fr1->keypoints[i].pt.y-fr1->keypoints[Back_Matched_id].pt.y,2)<=4)
 			{
 				MatchedPoints[i] = Matched_id;
-				Matched_num++;
 			}
 		}
 	}
 
-	return Matched_num;
+	return MatchedPoints;
 }
 
 //compute the sum of squared difference (SSD) between patches(9x9).
@@ -80,7 +78,7 @@ int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> global
 	int count = 0;
 	for (auto i = globalH.begin();i!=globalH.end(); i++)
 	{
-		auto tmpd = matchByH(i->first, fr1, i->second);
+		auto tmpd = matchByH(fr1,i->first, i->second);
 		fr1->matchedGroup.insert(std::make_pair(i->first, tmpd));
 		count+=tmpd.size();
 	}
@@ -90,15 +88,15 @@ int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> global
 // Find corresponding feature points in two frames with homography
 // fr1 represent keyframe to project.
 // TODO: different search range for well and ill conditioned points
-std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
+std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 {
+	std::map<int,int> MatchedPoints={};
 	// kpl:points in fr1.
 	cv::Mat_<double> kpl(3,1);
 	// ppl:points projected to fr2.
 	cv::Mat_<double> ppl(3, 1);
 	int width = fr1->image.size().width;
 	int height = fr1->image.size().height;
-	std::map<cv::KeyPoint*, cv::KeyPoint*> ret;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp = fr1->keypoints[i];
@@ -131,8 +129,8 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 			continue;
 		}
 		int min_SSD_error = SSD_error_avg;
-		cv::KeyPoint* matchedKp = nullptr;
 		// iterate to find the smallest error in fr2.
+		int Matched_id=-1;
 		cv::Mat differ;
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
@@ -151,17 +149,16 @@ std::map<cv::KeyPoint*, cv::KeyPoint*> Matcher::matchByH(Frame* fr1, Frame* fr2,
 				ssdError = ssdError/warpedSize;
 				if (ssdError < min_SSD_error)
 				{
-					matchedKp = &(fr2->keypoints[j]);
 					min_SSD_error = ssdError;
 				}
 			}
 		}
-		if (matchedKp != nullptr)
+		if (Matched_id>-1)
 		{
-			ret.insert(std::make_pair(&(fr1->keypoints[i]), matchedKp));
+			MatchedPoints.insert(std::make_pair(i,Matched_id));
 		}
 	}
-	return ret;
+	return MatchedPoints;
 }
 
 inline cv::Mat warpPoint(cv::Mat_<double> point, cv::Mat H)
@@ -177,11 +174,12 @@ int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
 	int matchNum = 0;
 	for (auto iter = currFrame->matchedGroup.begin();iter!=currFrame->matchedGroup.end(); iter++)
 	{
+		KeyFrame* KFs=iter->first;
 		std::vector<cv::Point2f> fkp, kfkp;
 		for (auto iter2:iter->second)
 		{
-			fkp.push_back(iter2.first->pt);
-			kfkp.push_back(iter2.second->pt);
+			fkp.push_back(currFrame->keypoints[iter2.first].pt);
+			kfkp.push_back(KFs->keypoints[iter2.second].pt);
 		}
 		for (int i = 0;i<MAX_LOCAL_HOMO;i++)
 		{
@@ -206,7 +204,7 @@ int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
 					kfkp.erase(kfkp.begin()+j);
 				}
 			}
-			auto ret = matchByH(kfs, currFrame, homo);
+			auto ret = matchByH(currFrame,kfs,homo);
 			iter->second.insert(ret.begin(), ret.end());
 			matchNum+=ret.size();
 		}

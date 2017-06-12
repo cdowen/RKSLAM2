@@ -3,7 +3,7 @@
 #include <iostream>
 #include "tracking.h"
 //return the type of opencv paraments.
-/*std::string type2str(int type) {
+std::string type2str(int type) {
   std::string r;
 
   uchar depth = type & CV_MAT_DEPTH_MASK;
@@ -24,23 +24,20 @@
   r += (chans+'0');
 
   return r;
-}*/
+}
 
-Initialization::Initialization(Tracking* tracking, const Frame& ReferenceFrame, int iterations)
+Initialization::Initialization(Tracking* tracking, Frame* ReferenceFrame)
 {
   //for test.
-    _ReferenceFrame=ReferenceFrame.image;
-
-  mvKeys1=ReferenceFrame.keypoints;
+    _ReferenceFrame=ReferenceFrame;
   mK=tracking->mK;
-  MaxIterations=iterations;
 }
 
 
 bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated)
 {
-  mvKeys2=CurrentFrame.keypoints;
-  
+	mvKeys1=_ReferenceFrame->keypoints;
+	mvKeys2=CurrentFrame.keypoints;
   mMatchedKeys1.clear(); mMatchedKeys2.clear();
   for(int i=0;i<mvKeys1.size();i++)
   {
@@ -58,6 +55,7 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& Ma
      threadH.join();
      threadE.join();
 
+
     //for test.
     /*cv::Mat ProjectedFrame=cv::Mat(CurrentFrame.image.size(),CV_8UC1,cv::Scalar(0));
     cv::Mat_<double> point=cv::Mat(3,1,CV_64FC1);
@@ -71,7 +69,7 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& Ma
             result=result/result(2);
             if (result(0)>0&&result(0)<CurrentFrame.image.size().width&&result(1)>0&&result(1)<CurrentFrame.image.size().height)
             {
-                ProjectedFrame.at<uint8_t>(result(1),result(0))=_ReferenceFrame.at<uint8_t>(inty,intx);
+                ProjectedFrame.at<uint8_t>(result(1),result(0))=_ReferenceFrame.image.at<uint8_t>(inty,intx);
             }
         }
     }
@@ -80,7 +78,7 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& Ma
     cv::addWeighted(CurrentFrame.image,0.5,ProjectedFrame,0.5,0.5,resultImg);
     cv::imshow("Project_Result",ProjectedFrame);
     cv::imshow("CurrentFrme",CurrentFrame.image);
-    cv::imshow("ReferenceFrame",_ReferenceFrame);
+    cv::imshow("ReferenceFrame",_ReferenceFrame.image);
     cv::Mat differ;
     cv::absdiff(ProjectedFrame, CurrentFrame.image, differ);
     differ = differ&(ProjectedFrame!=0);
@@ -126,6 +124,7 @@ void Initialization::FindHomography(float& score,cv::Mat& H21)
   score=cv::countNonZero(InlierH);
   //std::cout<<"Homography is: "<<H21<<" type: "<<type2str(H21.type())<<std::endl;
   std::cout<<"The number of the inlier points using FindHomography is: "<<score<<std::endl;
+	DeltaH=H21;
 }
 
 //Compute Essential Mat from the corresponding points in two images. mvKeys2*E21*mvKeys1=0.

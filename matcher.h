@@ -7,11 +7,10 @@
 class Matcher{
 public:
 	Matcher(){};
-	int SearchForInitialization( Frame* fr1, Frame* fr2);
-	std::map<int,int> MatchedPoints;
+	std::map<int ,int > SearchForInitialization( Frame* fr1, Frame* fr2);
 	int SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH);
 	int SearchMatchByLocal(Frame* currFrame, std::vector<KeyFrame*> kfs);
-	std::map<cv::KeyPoint*, cv::KeyPoint*> matchByH(Frame* fr1, Frame* fr2, cv::Mat H);
+	std::map<int,int> matchByH(Frame* fr1, Frame* fr2, cv::Mat H);
 	int MatchByLocalH(Frame *currFrame, KeyFrame *kfs);
 
 private:

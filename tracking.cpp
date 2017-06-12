@@ -10,17 +10,23 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <vikit/vision.h>
+
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
+
+enum InitializeMethod
+{
+	Delta_H=0,
+	LK=1,
+	CoarseToFine=2
+};
+
 
 void Tracking::Run(std::string pathtoData)
 {
-
-	//for test.
-	std::ofstream file;
-	file.open("file.txt");
 	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
 	void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat());
-	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame);
+	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches);
 	//Load Images.
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
@@ -29,8 +35,9 @@ void Tracking::Run(std::string pathtoData)
 
 	int nImages=vstrImageFilenames.size();
 
-	for(int ni=50;ni<nImages;ni++)
+	for(int ni=0;ni<nImages;ni++)
 	{
+		InitializeMethod Method=LK;
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
 		Frame* fr = new Frame();
@@ -38,139 +45,178 @@ void Tracking::Run(std::string pathtoData)
 		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
 		fr->image = im;
 		fr->id = ni;
-		cv::FAST(fr->image, fr->keypoints, fr->Fast_threshold, true);
-		if(fr->keypoints.size()>nDesiredPoint)
+		if(Method==LK)
 		{
-			cv::KeyPointsFilter::retainBest(fr->keypoints,nDesiredPoint);
-			fr->keypoints.resize(nDesiredPoint);
+			//Build Image Pyramid.
+			fr->ImgPyrForInitial.resize(PyramidLevel);
+			fr->ImgPyrForInitial[0]=fr->image;
+			for (int i = 1; i < PyramidLevel; ++i)
+			{
+				fr->ImgPyrForInitial[i]=cv::Mat(fr->ImgPyrForInitial[i-1].rows/2,fr->ImgPyrForInitial[i-1].cols/2,CV_8U);
+				vk::halfSample(fr->ImgPyrForInitial[i-1],fr->ImgPyrForInitial[i]);
+			}
 		}
-		std::cout<<"The number of FAST: "<<fr->keypoints.size()<<std::endl;
-		fr->mappoints.reserve(fr->keypoints.size());
-		std::fill(fr->mappoints.begin(), fr->mappoints.end(), nullptr);
 		fr->timestamp = tframe;
 		lastFrame = currFrame;
 		currFrame = fr;
+
 		//Initialize.
 		if(mState==NOT_INITIALIZED)
 		{
-			if (!Initializer)
+			if(Method==LK)
 			{
-				if (fr->keypoints.size() >= 100)
+				if (!Initializer)
 				{
-					Initializer = new Initialization(this, *fr, 2000);
-					FirstFrame = fr;
-					std::cout << ni << "th(" <<std::setprecision(16) << tframe
-							  << ") image is selected as FirstFrame!\n";
-				}
-			} else
-			{
-				std::cout << ni << "th(" << std::setprecision(16) << tframe << ") image is selected as SecondFrame!\n";
-				if (fr->keypoints.size() < 100)
-				{
-					delete Initializer;
-					Initializer = nullptr;
-					continue;
-				}
+					//Detect Fast Feature with Shi-Tomasi-Score and grid.
+					int grid_n_cols_=std::ceil(static_cast<double>(fr->image.cols)/cell_size);
+					int grid_n_rows_=std::ceil(static_cast<double>(fr->image.rows)/cell_size);
+					std::vector<float > score_at_grid(grid_n_cols_*grid_n_rows_,0);
+					std::vector<cv::KeyPoint>best_KeyPoint_at_grid(grid_n_cols_*grid_n_rows_);
+					for (int i = 0; i <PyramidLevel ; ++i)
+					{
+						const int scale=(1<<i);
+						std::vector<cv::KeyPoint> CandidateKeyPoint;
+						cv::FAST(fr->ImgPyrForInitial[i],CandidateKeyPoint,20,true);
+						for (auto it=CandidateKeyPoint.begin();it!=CandidateKeyPoint.end();++it)
+						{
+							float score=vk::shiTomasiScore(fr->ImgPyrForInitial[i],it->pt.x,it->pt.y);
+							//Divide the image in cells of fixed size(30*30)
+							int k= static_cast<int>((it->pt.y*scale)/cell_size)*grid_n_cols_+ static_cast<int>((it->pt.x*scale)/cell_size);
+							if (score>score_at_grid[k])
+							{
+								cv::Point2f pt;pt.x=it->pt.x*scale;pt.y=it->pt.y*scale;
+								best_KeyPoint_at_grid[k]=cv::KeyPoint(pt,1,-1,score);
+							}
+						}
+					}
+					//Leave the points above the threshold.
+					for (std::vector<cv::KeyPoint>::iterator kp=best_KeyPoint_at_grid.begin();kp!=best_KeyPoint_at_grid.end();++kp)
+					{
+						if (kp->response>ShiTScore_Threshold)fr->keypoints.push_back(*kp);
+					}
+					std::cout<<fr->keypoints.size()<<" is detected by Fast.\n";
 
-				Matcher Match;
-
-				std::vector<cv::KeyPoint> kp1, kp2;
-
-				//for test.
-				std::vector<cv::DMatch>match1to2;
-				std::vector<cv::KeyPoint>keypoints1={};
-				std::vector<cv::KeyPoint>keypoints2={};
-
-				std::cout<<"Match "<<Match.SearchForInitialization(FirstFrame,fr)<<" points.\n";
-
-
-				if (Match.SearchForInitialization(FirstFrame, fr) < 10)
-				{
-					delete Initializer;
-					Initializer = nullptr;
-					continue;
-				}
-				SecondFrame = fr;
-
-				//for test.
-				/*int num=0;
-				for (std::map<int,int>::iterator MatchedPair=Match.MatchedPoints.begin();MatchedPair!=Match.MatchedPoints.end();++MatchedPair)
-				{
-					cv::DMatch dm;
-					dm.imgIdx=0;
-					dm.queryIdx=dm.trainIdx=num++;
-					match1to2.push_back(dm);
-					keypoints1.push_back(FirstFrame->keypoints[MatchedPair->first]);
-					keypoints2.push_back(SecondFrame->keypoints[MatchedPair->second]);
-				}
-				cv::Mat out;
-				cv::drawMatches(FirstFrame->image, keypoints1, SecondFrame->image, keypoints2, match1to2, out);
-				imshow("matches", out);
-				cv::waitKey(0);*/
-
-				//KeyFrame *debug_kf = static_cast<KeyFrame *>(currFrame);
-				//assert(debug_kf->sbiImg.size().height == 30 && debug_kf->sbiImg.size().width == 40);
-				cv::Mat R21;
-				cv::Mat t21;
-				std::vector<cv::Point3d> vP3D;
-				std::vector<bool> vbTriangulated;
-				if (!Initializer->Initialize(*SecondFrame, Match.MatchedPoints, R21, t21, vP3D, vbTriangulated))
-				{
-					std::cout << "Failed to Initialize.\n\n";
+					if (fr->keypoints.size() >= 100)
+					{
+						Initializer = new Initialization(this, fr);
+						FirstFrame = fr;
+						std::cout << ni << "th(" << std::setprecision(16) << tframe
+								  << ") image is selected as FirstFrame!\n";
+					}
 				}
 				else
 				{
-					std::cout << "System Initialized !\n\n";
-					// store mTcw of keyframes
-					std::cout<<"R = "<<R21<<std::endl;
-					std::cout<<"t = "<<t21<<std::endl;
-					SecondFrame->mTcw.colRange(0,3).rowRange(0,3)=R21;
-					SecondFrame->mTcw.colRange(0,3).row(3)=t21;
-
-					// store points in keyframe
-					Map *map = Map::getInstance();
-					std::map<cv::KeyPoint*, cv::KeyPoint*> mapData;
-					for (std::map<int,int>::iterator MatchedPair=Match.MatchedPoints.begin();MatchedPair!=Match.MatchedPoints.end();++MatchedPair)
+					std::cout << ni << "th(" << std::setprecision(16) << tframe
+							  << ") image is selected as SecondFrame!\n";
+					//Match by LK.
+					std::vector<cv::Point2f>first_frame_point,matched_point_LK;
+					for (int i = 0; i <FirstFrame->keypoints.size() ; ++i)
 					{
-						int vbPointNum=0;
-
-						mapData.insert(std::make_pair(&SecondFrame->keypoints[MatchedPair->second], &FirstFrame->keypoints[MatchedPair->first]));
-						if (vbTriangulated[vbPointNum])
-						{
-							MapPoint *mp = new MapPoint;
-							mp->Tw(0) = vP3D[vbPointNum].x;
-							mp->Tw(1) = vP3D[vbPointNum].y;
-							mp->Tw(2) = vP3D[vbPointNum].z;
-							mp->allObservation.insert(
-									std::make_pair(static_cast<KeyFrame *>(FirstFrame), &FirstFrame->keypoints[MatchedPair->first]));
-							mp->allObservation.insert(std::make_pair(static_cast<KeyFrame *>(SecondFrame),
-																	 &SecondFrame->keypoints[MatchedPair->second]));
-							FirstFrame->mappoints[vbPointNum] = mp;
-							SecondFrame->mappoints[MatchedPair->second] = mp;
-							map->allMapPoint.push_back(mp);
-
-							//for test
-							file<<std::setprecision(9)<<vP3D[vbPointNum].x<<" "<<vP3D[vbPointNum].y<<" "<<vP3D[vbPointNum].z<<std::endl;
-
-						}
-						++vbPointNum;
+						first_frame_point.push_back(FirstFrame->keypoints[i].pt);
+						matched_point_LK.push_back(FirstFrame->keypoints[i].pt);
 					}
-					SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), mapData));
-					map->allKeyFrame.push_back(static_cast<KeyFrame *>(FirstFrame));
-					map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
-					lastFrame = SecondFrame;
-					mState = OK;
-					//drawMatch(FirstFrame, SecondFrame, mapData);
-					//void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame);
-					//findCorrespondenceByKp(lastFrame, currFrame);
-					//for test
-					file.close();
-					/*cv::Mat out;
-					cv::drawMatches(FirstFrame->image, keypoints1, SecondFrame->image, keypoints2, match1to2, out);
-					imshow("matches", out);
-					cv::waitKey(0);*/
+					std::vector<uchar >status;
+					std::vector<float >error;
+					const int klt_win_size=30;
+					const int klt_max_iter=30;
+					const double klt_eps=0.001;
+					cv::TermCriteria termcrit (cv::TermCriteria::COUNT+cv::TermCriteria::EPS,klt_max_iter,klt_eps);
+					cv::calcOpticalFlowPyrLK(FirstFrame->ImgPyrForInitial[0],fr->ImgPyrForInitial[0],first_frame_point,matched_point_LK,status,error,cv::Size2i(klt_win_size,klt_win_size),4,termcrit);
+					std::vector<cv::KeyPoint>::iterator First_keypoint_it=FirstFrame->keypoints.begin();
+					std::vector<cv::Point2f>::iterator matched_point_LK_it=matched_point_LK.begin();
+					for (size_t i = 0; First_keypoint_it!=FirstFrame->keypoints.end(); ++i)
+					{
+						if(!status[i])
+						{
+							First_keypoint_it=FirstFrame->keypoints.erase(First_keypoint_it);
+							matched_point_LK_it=matched_point_LK.erase(matched_point_LK_it);
+							continue;
+						}
+						++First_keypoint_it;
+						++matched_point_LK_it;
+					}
+					std::cout << "Match " << matched_point_LK.size() << " points. \n";
 
-					continue;
+					if (matched_point_LK.size() < 150)
+					{
+						delete Initializer;
+						Initializer = static_cast<Initialization*>(NULL);
+						continue;
+					}
+
+					//for test: draw matches when initializing with LK.
+					//void drawMatchInitial(Frame* lastFrame, Frame* currFrame, std::vector<cv::Point2f>matches);
+					//drawMatchInitial(FirstFrame,fr,matched_point_LK);
+					SecondFrame = fr;
+					cv::KeyPoint::convert(matched_point_LK,SecondFrame->keypoints);
+
+					cv::Mat R21;
+					cv::Mat t21;
+					std::vector<cv::Point3d> vP3D;
+					std::vector<bool> vbTriangulated;
+					std::map<int,int>MatchedPoints;
+					for (int j = 0; j <matched_point_LK.size() ; ++j)
+					{
+						MatchedPoints.insert(std::make_pair(j,j));
+					}
+					if (!Initializer->Initialize(*SecondFrame, MatchedPoints, R21, t21, vP3D,
+													  vbTriangulated))
+					{
+						std::cout << "Failed to Initialize.\n\n";
+
+					} else
+					{
+						std::cout << "System Initialized !\n\n";
+						//for test: compare the precision of the H between using sbi and using opencv::computeH.
+						//void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
+						//testProjection(FirstFrame, SecondFrame);
+						//testProjection(FirstFrame,SecondFrame,Initializer->DeltaH);
+
+						// store mTcw of keyframes
+						//TODO
+						std::cout<<"R = "<<R21<<std::endl;
+						std::cout<<"t = "<<t21<<std::endl;
+						SecondFrame->mTcw.colRange(0,3).rowRange(0,3)=R21;
+						SecondFrame->mTcw.colRange(0,3).row(3)=t21;
+
+						// store points in keyframe
+						FirstFrame->mappoints.reserve(FirstFrame->keypoints.size());
+						std::fill(FirstFrame->mappoints.begin(), FirstFrame->mappoints.end(), nullptr);
+						SecondFrame->mappoints.reserve(SecondFrame->keypoints.size());
+						std::fill(SecondFrame->mappoints.begin(), SecondFrame->mappoints.end(), nullptr);
+						Map *map = Map::getInstance();
+						std::map<int,int> mapData;
+						for (std::map<int,int>::iterator MatchedPair=MatchedPoints.begin();MatchedPair!=MatchedPoints.end();++MatchedPair)
+						{
+							int vbPointNum = 0;
+
+							mapData.insert(std::make_pair(MatchedPair->second, MatchedPair->first));
+							if (vbTriangulated[vbPointNum])
+							{
+								MapPoint *mp = new MapPoint;
+								mp->Tw(0) = vP3D[vbPointNum].x;
+								mp->Tw(1) = vP3D[vbPointNum].y;
+								mp->Tw(2) = vP3D[vbPointNum].z;
+								mp->allObservation.insert(
+										std::make_pair(static_cast<KeyFrame *>(FirstFrame),
+													   &FirstFrame->keypoints[MatchedPair->first]));
+								mp->allObservation.insert(std::make_pair(static_cast<KeyFrame *>(SecondFrame),
+																		 &SecondFrame->keypoints[MatchedPair->second]));
+								FirstFrame->mappoints[vbPointNum] = mp;
+								SecondFrame->mappoints[MatchedPair->second] = mp;
+								map->allMapPoint.push_back(mp);
+							}
+							++vbPointNum;
+						}
+
+						SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame *>(FirstFrame), mapData));
+						map->allKeyFrame.push_back(static_cast<KeyFrame *>(FirstFrame));
+						map->allKeyFrame.push_back(static_cast<KeyFrame *>(SecondFrame));
+						lastFrame = SecondFrame;
+						mState = OK;
+
+						continue;
+					}
 				}
 			}
 		}
@@ -181,7 +227,8 @@ void Tracking::Run(std::string pathtoData)
 				auto kf = map->allKeyFrame.back();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 				testProjection(lastFrame,currFrame, a);
-				findCorrespondenceByKp(lastFrame, currFrame);
+				std::map<int,int>matches;
+				findCorrespondenceByKp(lastFrame, currFrame,matches);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
 				std::map<KeyFrame*, cv::Mat> khs;
 
@@ -228,28 +275,6 @@ void Tracking::Run(std::string pathtoData)
 				//vec.insert(std::make_pair(static_cast<KeyFrame*>(fr1), a));
 				//int match_num_1 = Match.SearchMatchByGlobal(fr2, vec);
 				//auto b = tr.ComputeHGlobalKF(static_cast<KeyFrame*>(fr1), fr2);
-
-
-
-
-				/*int tmpd = 0;
-				 std::vector<cv::DMatch> dm;
-				for (auto it = fr2->matchedGroup.begin(); it != fr2->matchedGroup.end(); ++it)
-				{
-					cv::DMatch tmp;
-					tmp.imgIdx = 0;
-					tmp.trainIdx = tmp.queryIdx = tmpd;
-					dm.push_back(tmp);
-					kp1.push_back(*it->second.second);
-					kp2.push_back(*it->first);
-					tmpd++;
-				}
-				cv::Mat out;
-				cv::drawMatches(im1, kp1, im2, kp2, dm, out);
-				imshow("matches", out);
-				cv::waitKey(0);*/
-
-				//getchar();
 			}
 		}
 	//Local Mapping.

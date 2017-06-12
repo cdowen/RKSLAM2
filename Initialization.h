@@ -9,12 +9,13 @@ class Tracking;
 class Initialization
 {
 public:
-  Initialization(Tracking* tracking, const Frame &ReferenceFrame, int iterations = 200);
+  Initialization(Tracking* tracking, Frame* ReferenceFrame);
   //bool Initialize(const Frame &CurrentFrame, std::map<int,int> MatchedPoints,cv::Mat &R21, cv::Mat &t21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated);
   bool Initialize(const Frame& CurrentFrame, std::map<int,int>& MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated);
+	cv::Mat DeltaH=cv::Mat::eye(3,3,CV_64FC1);
 private:
   //for test.
-    cv::Mat _ReferenceFrame;
+    Frame* _ReferenceFrame;
 
   std::vector<cv::KeyPoint> mvKeys1; std::vector<cv::KeyPoint> mvKeys2;
   std::vector<cv::Point2f> mMatchedKeys1; std::vector<cv::Point2f> mMatchedKeys2;

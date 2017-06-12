@@ -79,11 +79,11 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 	cv::absdiff(reM, currImage, differ);
 	differ = differ&(reM!=0);
 	double error = differ.dot(differ);
-	std::cout<<error/1200<<"\n";
+	std::cout<<error/(640*480)<<"\n";
 	cv::waitKey(0);
 }
 
-void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches)
+void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
 {
 	int tmpd;
 	std::vector<cv::DMatch> dm;
@@ -94,8 +94,8 @@ void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::K
 		tmp.imgIdx = 0;
 		tmp.trainIdx = tmp.queryIdx = tmpd;
 		dm.push_back(tmp);
-		kp1.push_back(*it->second);
-		kp2.push_back(*it->first);
+		kp1.push_back(lastFrame->keypoints[it->second]);
+		kp2.push_back(currFrame->keypoints[it->first]);
 		tmpd++;
 	}
 	cv::Mat out;
@@ -104,20 +104,20 @@ void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::K
 	cv::waitKey(0);
 }
 
-void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches)
+void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
 {
 	std::vector<cv::Point2f> kp1, kp2;
 	for (auto it = matches.begin();it!=matches.end();it++)
 	{
-		kp1.push_back(it->second->pt);
-		kp2.push_back(it->first->pt);
+		kp1.push_back(lastFrame->keypoints[it->second].pt);
+		kp2.push_back(currFrame->keypoints[it->first].pt);
 	}
 	cv::Mat mask;
 	cv::Mat H = cv::findHomography(kp1, kp2, cv::RANSAC, 2, mask);
 	testProjection(lastFrame, currFrame, H);
 }
 
-void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*>& matches)
+void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches)
 {
 	cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create();
 	cv::Mat desc1, desc2;
@@ -134,7 +134,7 @@ void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<cv::Key
 		if( dist < min_dist ) min_dist = dist;
 		if( dist > max_dist ) max_dist = dist;
 	}
-	std::map<cv::KeyPoint*, cv::KeyPoint*> good_matches;
+	std::map<int,int> good_matches;
 	std::vector<cv::DMatch> good_matches2;
 
 	for( int i = 0; i < desc1.rows; i++ )
@@ -142,15 +142,15 @@ void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<cv::Key
 		if( dMatches[i].distance <= std::max(3*min_dist, 0.02) )
 		{
 			good_matches2.push_back(dMatches[i]);
-			good_matches.insert(std::make_pair(&kp2[dMatches[i].trainIdx], &kp1[dMatches[i].queryIdx]));
+			good_matches.insert(std::make_pair(dMatches[i].trainIdx, dMatches[i].queryIdx));
 		}
 	}
 
 	std::vector<cv::Point2f> kpp1, kpp2;
 	for (auto it = good_matches.begin();it!=good_matches.end();it++)
 	{
-		kpp1.push_back(it->second->pt);
-		kpp2.push_back(it->first->pt);
+		kpp1.push_back(lastFrame->keypoints[it->second].pt);
+		kpp2.push_back(currFrame->keypoints[it->first].pt);
 	}
 	cv::Mat mask;
 	cv::Mat H = cv::findHomography(kpp1, kpp2, cv::RANSAC, 1, mask);
@@ -164,4 +164,24 @@ void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<cv::Key
 		iter++;
 	}
 	std::cout<<"before filter:"<<good_matches.size()<<" after filter:"<<matches.size()<<"\n";
+}
+void drawMatchInitial(Frame* lastFrame, Frame* currFrame, std::vector<cv::Point2f>matches)
+{
+	int tmpd=0;
+	std::vector<cv::DMatch> dm;
+	std::vector<cv::KeyPoint> kp1, kp2;
+	kp1=lastFrame->keypoints;
+	cv::KeyPoint::convert(matches,kp2);
+	for (int it=0;it<matches.size();++it)
+	{
+		cv::DMatch tmp;
+		tmp.imgIdx = 0;
+		tmp.trainIdx = tmp.queryIdx = tmpd;
+		dm.push_back(tmp);
+		tmpd++;
+	}
+	cv::Mat out;
+	cv::drawMatches(lastFrame->image, kp1, currFrame->image, kp2, dm, out);
+	imshow("matches", out);
+	cv::waitKey(0);
 }

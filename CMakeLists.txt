@@ -8,11 +8,13 @@ find_package(OpenCV 3 REQUIRED)
 find_package(G2O REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package (Threads)
+find_package(vikit_common REQUIRED)
 
 include_directories(${OpenCV_INCLUDE_DIRS} 
 ${G2O_INCLUDE_DIRS}
 ${EIGEN3_INCLUDE_DIR}
 ${CSPARSE_INCLUDE_DIR}
+${vikit_common_INCLUDE_DIR}
 )
 
 add_executable(rkslam2 
@@ -39,6 +41,7 @@ target_link_libraries(rkslam2
         ${G2O_TYPES_SBA}
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${CMAKE_THREAD_LIBS_INIT}
+        ${vikit_common_LIBRARIES}
 )
 elseif(CMAKE_BUILD_TYPE EQUAL "RELEASE")
 target_link_libraries(rkslam2
@@ -51,6 +54,7 @@ target_link_libraries(rkslam2
         ${G2O_TYPES_SBA}
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${CMAKE_THREAD_LIBS_INIT}
+        ${vikit_common_LIBRARIES}
 )
 elseif (WIN32)
 target_link_libraries(rkslam2
@@ -62,6 +66,7 @@ target_link_libraries(rkslam2
         ${G2O_SOLVER_CSPARSE_DEBUG}
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${G2O_TYPES_SBA}
+        ${vikit_common_LIBRARIES}
 )
 else()
 target_link_libraries(rkslam2
@@ -74,5 +79,6 @@ target_link_libraries(rkslam2
         ${G2O_TYPES_SBA}
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${CMAKE_THREAD_LIBS_INIT}
+        ${vikit_common_LIBRARIES}
 )
 endif()
