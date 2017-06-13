@@ -7,7 +7,8 @@
 #include "tracking.h"
 #include "Optimizer.h"
 #include <opencv2/xfeatures2d.hpp>
-
+#include <Eigen/Geometry>
+cv::Mat generateImage(cv::Mat image);
 // fr1 as the reference frame; project points in fr2 to fr1;
 void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 {
@@ -25,7 +26,8 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 		lastFrame = new Frame();
 		lastFrame->image = cv::imread("1.png", cv::IMREAD_GRAYSCALE);
 		currFrame = new Frame();
-		currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
+		//currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
+		currFrame->image = generateImage(lastFrame->image);
 		cv::resize(lastFrame->image, lastFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(lastFrame->sbiImg, lastFrame->sbiImg, cv::Size(0, 0), 0.75);
 		cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40, 30));
@@ -57,15 +59,15 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 		{
 			input(0) = j;input(1) = i;input(2) = 1;
 			//std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
-			//res = a*input;
-			res = a.inv()*input;
+			res = a*input;
+			//res = a.inv()*input;
 			//std::cout<<"before regulation:"<<res<<std::endl;
 			res = res/res(2);
 			//std::cout<<"after regulation:"<<res<<std::endl;
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)
 			{
-				//reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
-				reM.at<uint8_t>(i,j) =lastFrame->image.at<uint8_t>(res(1), res(0));
+				reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
+				//reM.at<uint8_t>(i,j) =lastFrame->image.at<uint8_t>(res(1), res(0));
 			}
 		}
 	}
@@ -185,3 +187,34 @@ void drawMatchInitial(Frame* lastFrame, Frame* currFrame, std::vector<cv::Point2
 	imshow("matches", out);
 	cv::waitKey(0);
 }
+
+cv::Mat generateImage(cv::Mat image)
+{
+	const double PI = 3.14159265359;
+	Eigen::Projective2d homo;
+	Eigen::Translation2d t;
+	t.x() = 1;
+	t.y() = 0;
+	Eigen::Rotation2Dd rot;
+	rot.angle() = 0.02*PI;
+	homo = t*rot;
+	homo = Eigen::Scaling(1.0, 1.0)*homo;
+	std::cout<<"constructed homography:"<<homo.matrix()<<"\n";
+
+	Eigen::Vector2d loc, projected;
+	cv::Mat res(image.size(), image.type(), cv::Scalar(0));
+	homo = homo.inverse();
+	for (int i = 0;i<image.rows;i++)
+	{
+		for (int j = 0;j<image.cols;j++)
+		{
+			loc<<j,i;
+			projected = (homo*loc.homogeneous()).hnormalized();
+			if (projected[1]>=0&&projected[1]<image.rows&&projected[0]>=0&&projected[0]<image.cols)
+				res.at<uint8_t>(i,j) = image.at<uint8_t>(projected[1], projected[0]);
+		}
+	}
+	cv::imshow("generated image", res);
+	return res;
+}
+

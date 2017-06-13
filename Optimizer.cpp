@@ -90,7 +90,6 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		}
 	}
 	std::cout << "Valid edge count:" << validCount << "\n";
-	//}
 	return result;
 }
 

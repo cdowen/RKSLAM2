@@ -13,7 +13,6 @@
 #include <vikit/vision.h>
 
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
-
 enum InitializeMethod
 {
 	Delta_H=0,
@@ -27,7 +26,9 @@ void Tracking::Run(std::string pathtoData)
 	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
 	void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat());
 	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches);
+	cv::Mat generateImage(cv::Mat image);
 	//Load Images.
+	testProjection(NULL, NULL);
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
 	std::string strFile=pathtoData+"/rgb.txt";
@@ -228,7 +229,7 @@ void Tracking::Run(std::string pathtoData)
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 				testProjection(lastFrame,currFrame, a);
 				std::map<int,int>matches;
-				findCorrespondenceByKp(lastFrame, currFrame,matches);
+				//findCorrespondenceByKp(lastFrame, currFrame,matches);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
 				std::map<KeyFrame*, cv::Mat> khs;
 
@@ -237,7 +238,7 @@ void Tracking::Run(std::string pathtoData)
 					cv::Mat b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
 					//testProjection(kfs[i], lastFrame, b);
 					//findCorrespondenceByKp(kfs[i], lastFrame);
-					void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
+					//void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
 					//drawMatch(kfs[i], lastFrame, lastFrame->matchedGroup[kfs[i]]);
 					cv::Mat c = b*a;
 					khs.insert(std::make_pair(kfs[i], c));
