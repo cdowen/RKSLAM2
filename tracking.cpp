@@ -28,7 +28,6 @@ void Tracking::Run(std::string pathtoData)
 	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches);
 	cv::Mat generateImage(cv::Mat image);
 	//Load Images.
-	testProjection(NULL, NULL);
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
 	std::string strFile=pathtoData+"/rgb.txt";
@@ -227,7 +226,6 @@ void Tracking::Run(std::string pathtoData)
 				Map* map = Map::getInstance();
 				auto kf = map->allKeyFrame.back();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
-				testProjection(lastFrame,currFrame, a);
 				std::map<int,int>matches;
 				//findCorrespondenceByKp(lastFrame, currFrame,matches);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
@@ -236,7 +234,7 @@ void Tracking::Run(std::string pathtoData)
 				for (int i = 0;i<kfs.size();i++)
 				{
 					cv::Mat b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
-					//testProjection(kfs[i], lastFrame, b);
+					testProjection(kfs[i], lastFrame, b);
 					//findCorrespondenceByKp(kfs[i], lastFrame);
 					//void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
 					//drawMatch(kfs[i], lastFrame, lastFrame->matchedGroup[kfs[i]]);

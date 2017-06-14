@@ -27,11 +27,13 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
 	im1 = fr1->sbiImg; im2 = fr2->sbiImg;
+	im2.convertTo(im2, CV_64FC1);
+	im1.convertTo(im1, CV_64FC1);
 	im1 = im1-cv::mean(im1)[0];
 	im2 = im2-cv::mean(im2)[0];
 
-	Sobel(im2, xgradient, CV_32FC1, 1, 0, 1);
-	Sobel(im2, ygradient, CV_32FC1, 0, 1, 1);
+	Sobel(im2, xgradient, CV_64FC1, 1, 0, 1);
+	Sobel(im2, ygradient, CV_64FC1, 0, 1, 1);
 
 
 	g2o::SparseOptimizer optimizer;
@@ -57,16 +59,16 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	{
 		EdgeSL3* e = new EdgeSL3();
 		e->setVertex(0, optimizer.vertex(0));
-		e->setMeasurement(*(im1.data + i));
+		e->setMeasurement(*((double*)im1.data + i));
 		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
 		e->setRobustKernel(rk);
 		rk->setDelta(thHuberDeltaI);
 
 		e->loc[0] = i%im1.size().width*16;
 		e->loc[1] = i/im1.size().width*16;
-		e->xgradient = &xgradient;
-		e->ygradient = &ygradient;
-		e->_image = &im2;
+		e->xgradient = xgradient;
+		e->ygradient = ygradient;
+		e->_image = im2;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
@@ -100,11 +102,27 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	cv::Mat im1 = kf->sbiImg;
 	cv::Mat im2 = fr2->sbiImg;
 	cv::Mat xgradient, ygradient;
+	im1.convertTo(im1, CV_64FC1);
+	im2.convertTo(im2, CV_64FC1);
+	std::cout<<"im2 avg:"<<cv::mean(im2)[0]<<"\n";
 	im1 = im1-cv::mean(im1)[0];
 	im2 = im2-cv::mean(im2)[0];
 
-	Sobel(im2, xgradient, CV_32FC1, 1, 0, 1);
-	Sobel(im2, ygradient, CV_32FC1, 0, 1, 1);
+	Sobel(im2, xgradient, CV_64FC1, 1, 0, 1);
+	Sobel(im2, ygradient, CV_64FC1, 0, 1, 1);
+
+	cv::Ptr<cv::Formatter> fmt = cv::Formatter::get(cv::Formatter::FMT_DEFAULT);
+	fmt->set64fPrecision(6);
+	std::ofstream f;
+	f.open("orig.txt");
+	f<<fmt->format(im2)<<"\n";
+	f.close();
+	f.open("x.txt");
+	f<<fmt->format(xgradient)<<"\n";
+	f.close();
+	f.open("y.txt");
+	f<<fmt->format(ygradient)<<"\n";
+	f.close();
 
 	g2o::SparseOptimizer optimizer;
 	BlockSolver_9_1::LinearSolverType * linearSolver;
@@ -129,17 +147,17 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	for (int i = 0; i < im1.size().height*im1.size().width; i++)
 	{
 		EdgeSL3* e = new EdgeSL3();
-		e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
-		e->setMeasurement(*(im1.data + i));
+		e->setVertex(0, optimizer.vertex(0));
+		e->setMeasurement(*((double*)im1.data + i));
 		g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
 		rk->setDelta(thHuberDeltaI);
 		e->setRobustKernel(rk);
 
 		e->loc[0] = i%im1.size().width*16;
 		e->loc[1] = i/im1.size().width*16;
-		e->_image = &im2;
-		e->xgradient = &xgradient;
-		e->ygradient = &ygradient;
+		e->_image = im2;
+		e->xgradient = xgradient;
+		e->ygradient = ygradient;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
@@ -161,7 +179,7 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		e->loc[0] = kf->keypoints[it2->second].pt.x;
 		e->loc[1] = kf->keypoints[it2->second].pt.y;
 		e->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
-		optimizer.addEdge(e);
+		//optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
 	cv::Mat result;

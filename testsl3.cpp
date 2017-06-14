@@ -7,6 +7,7 @@
 #include "tracking.h"
 #include "Optimizer.h"
 #include <opencv2/xfeatures2d.hpp>
+#include <opencv/cxeigen.hpp>
 #include <Eigen/Geometry>
 cv::Mat generateImage(cv::Mat image);
 // fr1 as the reference frame; project points in fr2 to fr1;
@@ -21,34 +22,43 @@ void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 
 void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 {
+	using namespace Eigen;
+	Matrix3d h;
+	if (!a.empty())
+	{
+		cv::cv2eigen(a, h);
+	}
 	if (lastFrame == NULL||currFrame==NULL)
 	{
 		lastFrame = new Frame();
 		lastFrame->image = cv::imread("1.png", cv::IMREAD_GRAYSCALE);
 		currFrame = new Frame();
-		//currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
-		currFrame->image = generateImage(lastFrame->image);
+		currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
+		//currFrame->image = generateImage(lastFrame->image);
 		cv::resize(lastFrame->image, lastFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(lastFrame->sbiImg, lastFrame->sbiImg, cv::Size(0, 0), 0.75);
 		cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(currFrame->sbiImg, currFrame->sbiImg, cv::Size(0,0), 0.75);
 	}
-	cv::Mat_<double> input, res;
-	input = cv::Mat(3, 1, CV_64FC1);
-	res = cv::Mat(3, 1, CV_64FC1);
+	Vector2d input, res;
 	if (a.empty())
 	{
 		a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 		// real answer
-		//a = (cv::Mat_<double>(3,3)<<
+		//h<<
 		//						  1.006182e+000, 2.459331e-003, 1.633217e-003,
 		//6.525023e-004, 1.013484e+000, -3.232950e-003,
-		//			  -6.010459e-004, -2.420502e-002, 9.999996e-001);
+		//			  -6.010459e-004, -2.420502e-002, 9.999996e-001;
 		// for Shen Chenlong
 		//a = (cv::Mat_<double>(3,3)<<
 		//						  1.160721381656755, -0.008292699626746215, -40.02850611710956,
 		//0.03435974520788249, 1.024597816043882, -13.14882445942777,
 		//6.140997224529456e-05, 2.661706740529356e-06, 1);
+		cv::cv2eigen(a, h);
+		//Matrix3d l,r;
+		//l.diagonal()<<16,16,1;
+		//r.diagonal()<<1./16, 1./16,1;
+		//h = l*h*r;
 
 	}
 	cv::Mat &currImage = currFrame->image;
@@ -57,12 +67,13 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 	{
 		for (int j = 0; j < currImage.cols; j++)
 		{
-			input(0) = j;input(1) = i;input(2) = 1;
+			input(0) = j;input(1) = i;
 			//std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
-			res = a*input;
+			Vector3d tmp = h*input.homogeneous();
+			tmp = tmp/tmp(2);
+			res <<tmp(0), tmp(1);
 			//res = a.inv()*input;
 			//std::cout<<"before regulation:"<<res<<std::endl;
-			res = res/res(2);
 			//std::cout<<"after regulation:"<<res<<std::endl;
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)
 			{
@@ -193,12 +204,12 @@ cv::Mat generateImage(cv::Mat image)
 	const double PI = 3.14159265359;
 	Eigen::Projective2d homo;
 	Eigen::Translation2d t;
-	t.x() = 1;
+	t.x() = 0;
 	t.y() = 0;
 	Eigen::Rotation2Dd rot;
-	rot.angle() = 0.02*PI;
+	rot.angle() = 0*PI;
 	homo = t*rot;
-	homo = Eigen::Scaling(1.0, 1.0)*homo;
+	homo = Eigen::Scaling(1.05, 1.0)*homo;
 	std::cout<<"constructed homography:"<<homo.matrix()<<"\n";
 
 	Eigen::Vector2d loc, projected;
