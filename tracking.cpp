@@ -223,9 +223,11 @@ void Tracking::Run(std::string pathtoData)
 			if(mState==OK)
 			{
 				std::cout<<"Tracking..."<<std::endl;
+				cv::FAST(currFrame->image, currFrame->keypoints, 20);
 				Map* map = Map::getInstance();
 				auto kf = map->allKeyFrame.back();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+				//testProjection(lastFrame, currFrame, a);
 				std::map<int,int>matches;
 				//findCorrespondenceByKp(lastFrame, currFrame,matches);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
@@ -234,11 +236,11 @@ void Tracking::Run(std::string pathtoData)
 				for (int i = 0;i<kfs.size();i++)
 				{
 					cv::Mat b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
-					testProjection(kfs[i], lastFrame, b);
 					//findCorrespondenceByKp(kfs[i], lastFrame);
 					//void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
 					//drawMatch(kfs[i], lastFrame, lastFrame->matchedGroup[kfs[i]]);
 					cv::Mat c = b*a;
+					testProjection(kfs[i], currFrame, c);
 					khs.insert(std::make_pair(kfs[i], c));
 				}
 				Matcher match;

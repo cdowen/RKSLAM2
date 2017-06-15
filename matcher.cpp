@@ -1,5 +1,7 @@
 #include "matcher.h"
 #include <stdint.h>
+#include <Eigen/Dense>
+#include <opencv2/core/eigen.hpp>
 #include "KeyFrame.h"
 std::map<int,int> Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 {
@@ -78,7 +80,7 @@ int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> global
 	int count = 0;
 	for (auto i = globalH.begin();i!=globalH.end(); i++)
 	{
-		auto tmpd = matchByH(fr1,i->first, i->second);
+		auto tmpd = matchByH(i->first,fr1, i->second);
 		fr1->matchedGroup.insert(std::make_pair(i->first, tmpd));
 		count+=tmpd.size();
 	}
@@ -92,17 +94,18 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 {
 	std::map<int,int> MatchedPoints={};
 	// kpl:points in fr1.
-	cv::Mat_<double> kpl(3,1);
+	Eigen::Vector2d kpl;
 	// ppl:points projected to fr2.
-	cv::Mat_<double> ppl(3, 1);
+	Eigen::Vector2d ppl;
+	Eigen::Matrix3d h;
+	cv::cv2eigen(H, h);
 	int width = fr1->image.size().width;
 	int height = fr1->image.size().height;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp = fr1->keypoints[i];
-		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y; kpl(2) = 1;
-		ppl = H*kpl;
-		ppl = ppl/ppl(2);
+		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y;
+		ppl = (h*kpl.homogeneous()).hnormalized();
 		cv::Mat_<uint8_t> warped(patchHalfSize * 2, patchHalfSize * 2, uint8_t(0));
 		int warpedSize = 0;
 		//calculate warped patch.
@@ -111,14 +114,12 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 			for (int jj = -patchHalfSize; jj < patchHalfSize; jj++)
 			{
 				// equation 7 in rkslam.
-				kpl = H*kpl;
-				kpl(0) = kpl(0) + ii; kpl(1) = kpl(1) + jj;
-				kpl = kpl / kpl(2);
-				kpl = H.inv()*kpl;
-				kpl = kpl / kpl(2);
-				if (kpl(0)>0 && kpl(0) < width&&kpl(1) > 0 && kpl(1) < height)
+				Eigen::Vector2d tmp;
+				tmp = (h*kpl.homogeneous()+Eigen::Vector3d(ii,jj,0)).hnormalized();
+				tmp = (h.inverse()*tmp.homogeneous()).hnormalized();
+				if (tmp(0)>0 && tmp(0) < width&&tmp(1) > 0 && tmp(1) < height)
 				{
-					warped(jj + patchHalfSize, ii + patchHalfSize) = fr1->image.at<uint8_t>(kpl(1), kpl(0));
+					warped(jj + patchHalfSize, ii + patchHalfSize) = fr1->image.at<uint8_t>(tmp(1), tmp(0));
 				}
 			}
 		}
@@ -150,12 +151,13 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 				if (ssdError < min_SSD_error)
 				{
 					min_SSD_error = ssdError;
+					Matched_id = j;
 				}
 			}
 		}
 		if (Matched_id>-1)
 		{
-			MatchedPoints.insert(std::make_pair(i,Matched_id));
+			MatchedPoints.insert(std::make_pair(Matched_id,i));
 		}
 	}
 	return MatchedPoints;

@@ -111,19 +111,6 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 	Sobel(im2, xgradient, CV_64FC1, 1, 0, 1);
 	Sobel(im2, ygradient, CV_64FC1, 0, 1, 1);
 
-	cv::Ptr<cv::Formatter> fmt = cv::Formatter::get(cv::Formatter::FMT_DEFAULT);
-	fmt->set64fPrecision(6);
-	std::ofstream f;
-	f.open("orig.txt");
-	f<<fmt->format(im2)<<"\n";
-	f.close();
-	f.open("x.txt");
-	f<<fmt->format(xgradient)<<"\n";
-	f.close();
-	f.open("y.txt");
-	f<<fmt->format(ygradient)<<"\n";
-	f.close();
-
 	g2o::SparseOptimizer optimizer;
 	BlockSolver_9_1::LinearSolverType * linearSolver;
 	linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
@@ -159,7 +146,7 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		e->xgradient = xgradient;
 		e->ygradient = ygradient;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-		optimizer.addEdge(e);
+		//optimizer.addEdge(e);
 	}
 	auto it = fr2->matchedGroup.find(kf);
 	// Must be in its overlapping set.
@@ -179,7 +166,7 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		e->loc[0] = kf->keypoints[it2->second].pt.x;
 		e->loc[1] = kf->keypoints[it2->second].pt.y;
 		e->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
-		//optimizer.addEdge(e);
+		optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
 	cv::Mat result;
