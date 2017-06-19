@@ -11,39 +11,33 @@
 #include <Eigen/Geometry>
 cv::Mat generateImage(cv::Mat image);
 // fr1 as the reference frame; project points in fr2 to fr1;
-void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H)
+void testMatchByH(Frame *fr1, Frame *fr2, Eigen::Matrix3d H)
 {
 	Matcher Match;
-	std::map<KeyFrame*, cv::Mat> vec;
+	std::map<KeyFrame*, Eigen::Matrix3d> vec;
 	vec.insert(std::make_pair(static_cast<KeyFrame*>(fr2), H));
 	int match_num = Match.SearchMatchByGlobal(fr1, vec);
 	std::cout<<"matched points by H:"<<match_num<<"\n";
 }
 
-void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
+void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eigen::Matrix3d::Zero())
 {
-	using namespace Eigen;
-	Matrix3d h;
-	if (!a.empty())
-	{
-		cv::cv2eigen(a, h);
-	}
 	if (lastFrame == NULL||currFrame==NULL)
 	{
 		lastFrame = new Frame();
 		lastFrame->image = cv::imread("1.png", cv::IMREAD_GRAYSCALE);
 		currFrame = new Frame();
-		currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
-		//currFrame->image = generateImage(lastFrame->image);
+		//currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
+		currFrame->image = generateImage(lastFrame->image);
 		cv::resize(lastFrame->image, lastFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(lastFrame->sbiImg, lastFrame->sbiImg, cv::Size(0, 0), 0.75);
 		cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(currFrame->sbiImg, currFrame->sbiImg, cv::Size(0,0), 0.75);
 	}
-	Vector2d input, res;
-	if (a.empty())
+	Eigen::Vector2d input, res;
+	if (h.isZero(0))
 	{
-		a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 		// real answer
 		//h<<
 		//						  1.006182e+000, 2.459331e-003, 1.633217e-003,
@@ -54,7 +48,6 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 		//						  1.160721381656755, -0.008292699626746215, -40.02850611710956,
 		//0.03435974520788249, 1.024597816043882, -13.14882445942777,
 		//6.140997224529456e-05, 2.661706740529356e-06, 1);
-		cv::cv2eigen(a, h);
 		//Matrix3d l,r;
 		//l.diagonal()<<16,16,1;
 		//r.diagonal()<<1./16, 1./16,1;
@@ -69,7 +62,7 @@ void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat())
 		{
 			input(0) = j;input(1) = i;
 			//std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
-			Vector3d tmp = h*input.homogeneous();
+			Eigen::Vector3d tmp = h*input.homogeneous();
 			tmp = tmp/tmp(2);
 			res <<tmp(0), tmp(1);
 			//res = a.inv()*input;
@@ -127,7 +120,9 @@ void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<int,int> matche
 	}
 	cv::Mat mask;
 	cv::Mat H = cv::findHomography(kp1, kp2, cv::RANSAC, 2, mask);
-	testProjection(lastFrame, currFrame, H);
+	Eigen::Matrix3d h;
+	cv::cv2eigen(H, h);
+	testProjection(lastFrame, currFrame, h);
 }
 
 void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches)
@@ -207,7 +202,7 @@ cv::Mat generateImage(cv::Mat image)
 	t.x() = 0;
 	t.y() = 0;
 	Eigen::Rotation2Dd rot;
-	rot.angle() = 0*PI;
+	rot.angle() = 0.0*PI;
 	homo = t*rot;
 	homo = Eigen::Scaling(1.05, 1.0)*homo;
 	std::cout<<"constructed homography:"<<homo.matrix()<<"\n";

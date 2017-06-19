@@ -3,11 +3,13 @@
 #include <opencv2/opencv.hpp>
 #include "MapPoint.h"
 #include <unordered_map>
+#include <Eigen/Core>
 
 class KeyFrame;
 class Frame
 {
 public:
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	cv::Mat image;
 	cv::Mat sbiImg;
 	std::vector<cv::Mat> ImgPyrForInitial;
@@ -22,7 +24,7 @@ public:
 	typedef std::unordered_map<KeyFrame*, std::map<int,int>> MultiMatch;
 	//std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> matchedGroup;
 	MultiMatch matchedGroup;
-	std::map<KeyFrame*, cv::Mat> keyFrameSet;
+	std::map<KeyFrame*, Eigen::Matrix3d> keyFrameSet;
 	//camera pose
 	cv::Mat mTcw=cv::Mat::eye(4,4,CV_64F);
 };

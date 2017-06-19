@@ -7,7 +7,7 @@
 #include <iomanip>
 
 bool testSL3();
-void testMatchByH(Frame* fr1, Frame* fr2, cv::Mat H);
+void testMatchByH(Frame *fr1, Frame *fr2, Eigen::Matrix3d H);
 
 int main(int argc, char *argv[])
 {

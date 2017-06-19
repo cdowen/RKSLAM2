@@ -23,10 +23,11 @@ enum InitializeMethod
 
 void Tracking::Run(std::string pathtoData)
 {
-	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
-	void testProjection(Frame* lastFrame, Frame* currFrame, cv::Mat a = cv::Mat());
+	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int, int> matches);
+	void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eigen::Matrix3d::Zero());
 	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches);
 	cv::Mat generateImage(cv::Mat image);
+	//testProjection(NULL, NULL);
 	//Load Images.
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
@@ -225,57 +226,27 @@ void Tracking::Run(std::string pathtoData)
 				std::cout<<"Tracking..."<<std::endl;
 				cv::FAST(currFrame->image, currFrame->keypoints, 20);
 				Map* map = Map::getInstance();
-				auto kf = map->allKeyFrame.back();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 				//testProjection(lastFrame, currFrame, a);
 				std::map<int,int>matches;
 				//findCorrespondenceByKp(lastFrame, currFrame,matches);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
-				std::map<KeyFrame*, cv::Mat> khs;
-
+				std::map<KeyFrame*, Eigen::Matrix3d> khs;
 				for (int i = 0;i<kfs.size();i++)
 				{
-					cv::Mat b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
+					Eigen::Matrix3d b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
 					//findCorrespondenceByKp(kfs[i], lastFrame);
 					//void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
 					//drawMatch(kfs[i], lastFrame, lastFrame->matchedGroup[kfs[i]]);
-					cv::Mat c = b*a;
-					testProjection(kfs[i], currFrame, c);
+					Eigen::Matrix3d c = b*a;
+					//testProjection(kfs[i], currFrame, c);
 					khs.insert(std::make_pair(kfs[i], c));
 				}
 				Matcher match;
 				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
 				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
 
-				//void testMatchHomo(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
-				//void findCorespondenceByKp(Frame* lastFrame, Frame* currFrame);
-				//testMatchHomo(lastFrame, currFrame, currFrame->matchedGroup[static_cast<KeyFrame*>(lastFrame)]);
-				//std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
-				//testProjection(khs.begin()->first, currFrame);
-				//findCorespondenceByKp(khs.begin()->first, currFrame);
-				//std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
 
-				/*
-				// match with direct alignment.
-				int datanum = 0;
-				for (int i = 0;i<kfs.size(); i++)
-				{
-					datanum += match.SearchForInitialization(kfs[i], currFrame, 15);
-					std::unordered_multimap<KeyFrame*, std::pair<cv::KeyPoint*, cv::KeyPoint*>> data;
-					for (auto j = match.MatchedPoints.begin();j!=match.MatchedPoints.end();j++)
-					{
-						data.insert(std::make_pair(kfs[i], std::make_pair(&currFrame->keypoints[j->first], &kfs[i]->keypoints[j->second])));
-					}
-					currFrame->matchedGroup = data;
-				}
-				std::cout<<"Matched points with keyframe:"<<datanum<<"\n";
-				*/
-
-
-				//std::map<KeyFrame*, cv::Mat> vec;
-				//vec.insert(std::make_pair(static_cast<KeyFrame*>(fr1), a));
-				//int match_num_1 = Match.SearchMatchByGlobal(fr2, vec);
-				//auto b = tr.ComputeHGlobalKF(static_cast<KeyFrame*>(fr1), fr2);
 			}
 		}
 	//Local Mapping.

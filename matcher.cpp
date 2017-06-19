@@ -75,7 +75,7 @@ int Matcher::SSDcompute(Frame* fr1, Frame* fr2, cv::KeyPoint kp1, cv::KeyPoint k
 	}
 }
 
-int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> globalH)
+int Matcher::SearchMatchByGlobal(Frame *fr1, std::map<KeyFrame *, Eigen::Matrix3d> globalH)
 {
 	int count = 0;
 	for (auto i = globalH.begin();i!=globalH.end(); i++)
@@ -90,15 +90,14 @@ int Matcher::SearchMatchByGlobal(Frame* fr1, std::map<KeyFrame*, cv::Mat> global
 // Find corresponding feature points in two frames with homography
 // fr1 represent keyframe to project.
 // TODO: different search range for well and ill conditioned points
-std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
+std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d h)
 {
 	std::map<int,int> MatchedPoints={};
 	// kpl:points in fr1.
 	Eigen::Vector2d kpl;
 	// ppl:points projected to fr2.
 	Eigen::Vector2d ppl;
-	Eigen::Matrix3d h;
-	cv::cv2eigen(H, h);
+	const Eigen::Matrix3d hinv = h.inverse();
 	int width = fr1->image.size().width;
 	int height = fr1->image.size().height;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
@@ -114,9 +113,11 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 			for (int jj = -patchHalfSize; jj < patchHalfSize; jj++)
 			{
 				// equation 7 in rkslam.
-				Eigen::Vector2d tmp;
-				tmp = (h*kpl.homogeneous()+Eigen::Vector3d(ii,jj,0)).hnormalized();
-				tmp = (h.inverse()*tmp.homogeneous()).hnormalized();
+				Eigen::Vector3d tmp;
+				tmp = h*kpl.homogeneous();
+				tmp = tmp/tmp(2);
+				tmp(0)+=ii;tmp(1)+=jj;
+				tmp = (hinv*tmp)/tmp(2);
 				if (tmp(0)>0 && tmp(0) < width&&tmp(1) > 0 && tmp(1) < height)
 				{
 					warped(jj + patchHalfSize, ii + patchHalfSize) = fr1->image.at<uint8_t>(tmp(1), tmp(0));
@@ -136,6 +137,11 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, cv::Mat H)
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
 			cv::Point2f pt2 = fr2->keypoints[j].pt;
+			Eigen::Vector2d tmp(pt2.x, pt2.y);
+			if (((hinv*tmp.homogeneous()).hnormalized()-kpl).squaredNorm()>reprojError)
+			{
+				continue;
+			}
 			if (abs(ppl(0) - pt2.x)<globalSearchHalfLength&&abs(ppl(1)-pt2.y)<globalSearchHalfLength)
 			{
 				int u = pt2.y-patchHalfSize;int d = pt2.y+patchHalfSize;int l = pt2.x-patchHalfSize;int r = pt2.x+patchHalfSize;
@@ -206,7 +212,9 @@ int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
 					kfkp.erase(kfkp.begin()+j);
 				}
 			}
-			auto ret = matchByH(currFrame,kfs,homo);
+			Eigen::Matrix3d ehomo;
+			cv::cv2eigen(homo, ehomo);
+			auto ret = matchByH(kfs,currFrame,ehomo);
 			iter->second.insert(ret.begin(), ret.end());
 			matchNum+=ret.size();
 		}

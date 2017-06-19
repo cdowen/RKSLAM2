@@ -4,7 +4,6 @@
 #include <g2o/core/optimization_algorithm_gauss_newton.h>
 #include <g2o/core/sparse_optimizer_terminate_action.h>
 #include <g2o/core/robust_kernel_impl.h>
-#include <opencv/cxeigen.hpp>
 #include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
@@ -23,7 +22,7 @@ const int numIterations = 100;
 cv::Mat Optimizer::mK;
 // compute homography that transform a point in fr1 to corresponding location in fr2.
 //  xfr2 = H*xfr1, consider fr1 as keyframe
-cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
+Eigen::Matrix3d Optimizer::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 {
 	cv::Mat im1, im2, xgradient, ygradient;
 	im1 = fr1->sbiImg; im2 = fr2->sbiImg;
@@ -75,12 +74,10 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 	optimizer.setVerbose(true);
 	solver->setWriteDebug(true);
 	optimizer.initializeOptimization();
-	cv::Mat result;
 	int validCount = 0;
 	optimizer.optimize(300);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-	cv::eigen2cv(sl3d->estimate(), result);
-	std::cout << result << "\n";
+	std::cout << sl3d->estimate() << "\n";
 	std::cout<<"mu:"<<sl3d->mu<<"\n";
 	std::vector<g2o::OptimizableGraph::Edge*> edges = optimizer.activeEdges();
 	for (int i = 0; i < edges.size(); i++)
@@ -92,12 +89,12 @@ cv::Mat Optimizer::ComputeHGlobalSBI(Frame* fr1, Frame* fr2)
 		}
 	}
 	std::cout << "Valid edge count:" << validCount << "\n";
-	return result;
+	return sl3d->estimate();
 }
 
 
 
-cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
+Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 {
 	cv::Mat im1 = kf->sbiImg;
 	cv::Mat im2 = fr2->sbiImg;
@@ -169,17 +166,15 @@ cv::Mat Optimizer::ComputeHGlobalKF(KeyFrame* kf, Frame* fr2)
 		optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
-	cv::Mat result;
 	optimizer.setVerbose(true);
 	optimizer.optimize(50);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-	cv::eigen2cv(sl3d->estimate(), result);
-	fr2->keyFrameSet.insert(std::make_pair(kf, result));
-	std::cout << "optimize with keypoint:"<< result << "\n";
-	return result;
+	fr2->keyFrameSet.insert(std::make_pair(kf, sl3d->estimate()));
+	std::cout << "optimize with keypoint:"<< sl3d->estimate() << "\n";
+	return sl3d->estimate();
 }
 
-cv::Mat Optimizer::PoseEstimation(Frame* fr)
+Eigen::Matrix4d Optimizer::PoseEstimation(Frame* fr)
 {
 	typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;
 	Block::LinearSolverType* linearSolver = new g2o::LinearSolverCSparse<Block::PoseMatrixType>();
@@ -235,5 +230,7 @@ cv::Mat Optimizer::PoseEstimation(Frame* fr)
 	optimizer.setVerbose ( true );
 	optimizer.initializeOptimization();
 	optimizer.optimize(10);
+	Eigen::Matrix4d ret = pose->estimate().to_homogeneous_matrix();
 	std::cout<<"T="<<std::endl<<Eigen::Isometry3d ( pose->estimate() ).matrix() <<std::endl;
+	return ret;
 }
