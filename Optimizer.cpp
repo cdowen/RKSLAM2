@@ -71,8 +71,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
 		optimizer.addEdge(e);
 	}
-	optimizer.setVerbose(true);
-	solver->setWriteDebug(true);
+	//optimizer.setVerbose(true);
+	//solver->setWriteDebug(true);
 	optimizer.initializeOptimization();
 	int validCount = 0;
 	optimizer.optimize(300);
@@ -166,7 +166,7 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 		optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
-	optimizer.setVerbose(true);
+	//optimizer.setVerbose(true);
 	optimizer.optimize(50);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
 	fr2->keyFrameSet.insert(std::make_pair(kf, sl3d->estimate()));
@@ -228,7 +228,7 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 		index++;
 	}
 
-	optimizer.setVerbose ( true );
+	//optimizer.setVerbose ( true );
 	optimizer.initializeOptimization();
 	optimizer.optimize(10);
 	std::cout<<"T="<<std::endl<<Eigen::Isometry3d ( pose->estimate() ).matrix() <<std::endl;

@@ -11,6 +11,7 @@
 #include <iostream>
 #include <iomanip>
 #include <vikit/vision.h>
+#include <g2o/types/slam3d/se3quat.h>
 
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
 enum InitializeMethod
@@ -243,8 +244,12 @@ void Tracking::Run(std::string pathtoData)
 					khs.insert(std::make_pair(kfs[i], c));
 				}
 				Matcher match;
-				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
-				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
+				int matchKfNum = match.SearchMatchByGlobal(currFrame, khs);
+				std::cout<<"Matched points with keyframe:"<<matchKfNum<<"\n";
+				if (matchKfNum<50)
+				{
+					std::cout << "Matched points with local homo:" << match.SearchMatchByLocal(currFrame, kfs) << "\n";
+				}
 
 				currFrame->mappoints.resize(currFrame->keypoints.size());
 				std::fill(currFrame->mappoints.begin(),currFrame->mappoints.end(),nullptr);
@@ -261,11 +266,19 @@ void Tracking::Run(std::string pathtoData)
 					}
 				}
 				auto Tcw = Optimizer::PoseEstimation(currFrame);
+				// TODO: new 3D points should be triangulated here.
+				g2o::SE3Quat t;
+				t.fromVector(Tcw);
+				cv::eigen2cv(t.to_homogeneous_matrix(), currFrame->mTcw);
 
 				if (DecideKeyFrame(lastFrame))
 				{
+					std::cout<<"new keyframe selected"<<"\n";
 					map->addKeyFrame(static_cast<KeyFrame*>(lastFrame));
-
+					// add link to new keyframe so that it will be used in tracking.
+					std::map<KeyFrame*, Eigen::Matrix3d> mmap;
+					mmap.insert(std::make_pair(static_cast<KeyFrame*>(lastFrame), a));
+					match.SearchMatchByGlobal(currFrame, mmap);
 				}
 			}
 		}
@@ -338,8 +351,7 @@ void Tracking::LoadImages(const std::string &strFile, std::vector<std::string> &
 
 bool Tracking::DecideKeyFrame(const Frame* currFrame)
 {
-	Tracking* tr;
-	if (tr->mState!=Tracking::OK)
+	if (this->mState!=Tracking::OK)
 	{
 		return false;
 	}
@@ -353,6 +365,7 @@ bool Tracking::DecideKeyFrame(const Frame* currFrame)
 	cv::Mat a = map->allKeyFrame.back()->mTcw;
 	cv::cv2eigen(a, t1);
 	//TODO: suitable threshold for comparison
+	cv::cv2eigen(currFrame->mTcw, t2);
 	return (t1.col(3).hnormalized()-t2.col(3).hnormalized()).squaredNorm()>0.1;
 }
 

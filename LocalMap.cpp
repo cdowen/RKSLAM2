@@ -7,8 +7,10 @@
 #include "g2o/solvers/csparse/linear_solver_csparse.h"
 #include "g2o/core/optimization_algorithm_levenberg.h"
 #include "g2o/types/sba/types_six_dof_expmap.h"
+#include "Map.h"
 #include <chrono>
 #include <vector>
+#include <opencv2/core/eigen.hpp>
 
 LocalMap::LocalMap(Tracking* tracking)
 {
@@ -310,3 +312,4 @@ void LocalMap::LocalOptimize(Frame *fr1)
 	std::chrono::duration<double > time_used_for_pose=std::chrono::duration_cast<std::chrono::duration<double>>(t2-t1);
 	std::cout<<"Pose Optimization costs time: "<<time_used_for_pose.count()<<" seconds\n";
 }
+

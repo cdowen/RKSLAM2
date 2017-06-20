@@ -21,9 +21,9 @@ public:
 	Tracking();
 	void Run(std::string);
 	std::vector<KeyFrame*> SearchTopOverlapping();
-
 	Frame* currFrame, *lastFrame;
 	cv::Mat mK;
+	bool DecideKeyFrame(const Frame* fr1);
 
 private:
 	void LoadImages(const std::string &strFile, std::vector<std::string> &vstrImageFilenames,
@@ -39,5 +39,6 @@ private:
 	int PyramidLevel=5;//LK
 	const int cell_size=30;
 	int ShiTScore_Threshold=20;
+	const int minimalKeyFrameInterval = 5;
 };
 #endif
