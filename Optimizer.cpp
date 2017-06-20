@@ -46,8 +46,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.001);
-	action->setMaxIterations(100);
+	action->setGainThreshold(0.01);
+	action->setMaxIterations(0);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -174,7 +174,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 	return sl3d->estimate();
 }
 
-Eigen::Matrix4d Optimizer::PoseEstimation(Frame* fr)
+// v[0-2]:t;v[3-6]:x,y,z,w
+Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 {
 	typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;
 	Block::LinearSolverType* linearSolver = new g2o::LinearSolverCSparse<Block::PoseMatrixType>();
@@ -185,21 +186,21 @@ Eigen::Matrix4d Optimizer::PoseEstimation(Frame* fr)
 
 	// vertex
 	g2o::VertexSE3Expmap* pose = new g2o::VertexSE3Expmap(); // camera pose
+	pose->setId(0);
 	pose->setEstimate ( g2o::SE3Quat ());
 	optimizer.addVertex ( pose );
 
 	int index = 1;
 	for ( const MapPoint* mp : fr->mappoints)   // landmarks
 	{
-		if (mp== nullptr)
+		if (mp!= nullptr)
 		{
-			continue;
+			g2o::VertexSBAPointXYZ *point = new g2o::VertexSBAPointXYZ();
+			point->setId(index++);
+			point->setEstimate(Eigen::Vector3d(mp->Tw(0), mp->Tw(1), mp->Tw(2)));
+			point->setMarginalized(true);
+			optimizer.addVertex(point);
 		}
-		g2o::VertexSBAPointXYZ* point = new g2o::VertexSBAPointXYZ();
-		point->setId ( index++ );
-		point->setEstimate ( Eigen::Vector3d ( mp->Tw(0), mp->Tw(1), mp->Tw(2) ) );
-		point->setMarginalized ( true );
-		optimizer.addVertex ( point );
 	}
 	// parameter: camera intrinsics
 	g2o::CameraParameters* camera = new g2o::CameraParameters (
@@ -230,7 +231,6 @@ Eigen::Matrix4d Optimizer::PoseEstimation(Frame* fr)
 	optimizer.setVerbose ( true );
 	optimizer.initializeOptimization();
 	optimizer.optimize(10);
-	Eigen::Matrix4d ret = pose->estimate().to_homogeneous_matrix();
 	std::cout<<"T="<<std::endl<<Eigen::Isometry3d ( pose->estimate() ).matrix() <<std::endl;
-	return ret;
+	return pose->estimate().toVector();
 }

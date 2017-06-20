@@ -1,6 +1,6 @@
 #include <opencv2/opencv.hpp>
 #include "tracking.h"
-#include <Eigen/Sparse>
+#include <Eigen/Dense>
 #include "Map.h"
 #include <opencv2/core/eigen.hpp>
 #include "LocalMap.h"
@@ -23,6 +23,7 @@ enum InitializeMethod
 
 void Tracking::Run(std::string pathtoData)
 {
+	typedef Eigen::Matrix<double, 7, 1, Eigen::ColMajor> Vector7d;
 	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int, int> matches);
 	void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eigen::Matrix3d::Zero());
 	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches);
@@ -35,7 +36,7 @@ void Tracking::Run(std::string pathtoData)
 	LoadImages(strFile,vstrImageFilenames,vTimestamps);
 
 	int nImages=vstrImageFilenames.size();
-
+	Optimizer::mK = this->mK;
 	for(int ni=0;ni<nImages;ni++)
 	{
 		InitializeMethod Method=LK;
@@ -181,16 +182,15 @@ void Tracking::Run(std::string pathtoData)
 						SecondFrame->mTcw.colRange(0,3).row(3)=t21;
 
 						// store points in keyframe
-						FirstFrame->mappoints.reserve(FirstFrame->keypoints.size());
+						FirstFrame->mappoints.resize(FirstFrame->keypoints.size());
 						std::fill(FirstFrame->mappoints.begin(), FirstFrame->mappoints.end(), nullptr);
-						SecondFrame->mappoints.reserve(SecondFrame->keypoints.size());
+						SecondFrame->mappoints.resize(SecondFrame->keypoints.size());
 						std::fill(SecondFrame->mappoints.begin(), SecondFrame->mappoints.end(), nullptr);
 						Map *map = Map::getInstance();
 						std::map<int,int> mapData;
+						int vbPointNum = 0;
 						for (std::map<int,int>::iterator MatchedPair=MatchedPoints.begin();MatchedPair!=MatchedPoints.end();++MatchedPair)
 						{
-							int vbPointNum = 0;
-
 							mapData.insert(std::make_pair(MatchedPair->second, MatchedPair->first));
 							if (vbTriangulated[vbPointNum])
 							{
@@ -246,7 +246,27 @@ void Tracking::Run(std::string pathtoData)
 				std::cout<<"Matched points with keyframe:"<<match.SearchMatchByGlobal(currFrame, khs)<<"\n";
 				std::cout<<"Matched points with local homo:"<<match.SearchMatchByLocal(currFrame, kfs)<<"\n";
 
+				currFrame->mappoints.resize(currFrame->keypoints.size());
+				std::fill(currFrame->mappoints.begin(),currFrame->mappoints.end(),nullptr);
+				for (auto it = currFrame->matchedGroup.begin();it!=currFrame->matchedGroup.end();it++)
+				{
+					Frame* kf = it->first;
+					for (auto it2 = it->second.begin();it2!=it->second.end();it2++)
+					{
+						currFrame->mappoints[it2->first] = kf->mappoints[it2->second];
+						if (kf->mappoints[it2->second]!= nullptr)
+						{
+							kf->mappoints[it2->second]->allObservation.insert(std::make_pair(currFrame, &currFrame->keypoints[it2->first]));
+						}
+					}
+				}
+				auto Tcw = Optimizer::PoseEstimation(currFrame);
 
+				if (DecideKeyFrame(lastFrame))
+				{
+					map->addKeyFrame(static_cast<KeyFrame*>(lastFrame));
+
+				}
 			}
 		}
 	//Local Mapping.
@@ -315,3 +335,24 @@ void Tracking::LoadImages(const std::string &strFile, std::vector<std::string> &
 		}
 	}
 }
+
+bool Tracking::DecideKeyFrame(const Frame* currFrame)
+{
+	Tracking* tr;
+	if (tr->mState!=Tracking::OK)
+	{
+		return false;
+	}
+	Map* map = Map::getInstance();
+	const unsigned long lastFrameId = map->allKeyFrame.back()->id;
+	if (currFrame->id-lastFrameId<=minimalKeyFrameInterval)
+	{
+		return false;
+	}
+	Eigen::Matrix4d t1, t2;
+	cv::Mat a = map->allKeyFrame.back()->mTcw;
+	cv::cv2eigen(a, t1);
+	//TODO: suitable threshold for comparison
+	return (t1.col(3).hnormalized()-t2.col(3).hnormalized()).squaredNorm()>0.1;
+}
+

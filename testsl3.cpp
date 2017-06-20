@@ -27,22 +27,22 @@ void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eige
 		lastFrame = new Frame();
 		lastFrame->image = cv::imread("1.png", cv::IMREAD_GRAYSCALE);
 		currFrame = new Frame();
-		//currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
-		currFrame->image = generateImage(lastFrame->image);
+		currFrame->image = cv::imread("2.png", cv::IMREAD_GRAYSCALE);
+		//currFrame->image = generateImage(lastFrame->image);
 		cv::resize(lastFrame->image, lastFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(lastFrame->sbiImg, lastFrame->sbiImg, cv::Size(0, 0), 0.75);
 		cv::resize(currFrame->image, currFrame->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(currFrame->sbiImg, currFrame->sbiImg, cv::Size(0,0), 0.75);
 	}
-	Eigen::Vector2d input, res;
+	Eigen::Vector3d input, res;
 	if (h.isZero(0))
 	{
-		h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		//h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 		// real answer
-		//h<<
-		//						  1.006182e+000, 2.459331e-003, 1.633217e-003,
-		//6.525023e-004, 1.013484e+000, -3.232950e-003,
-		//			  -6.010459e-004, -2.420502e-002, 9.999996e-001;
+		h<<
+								  1.006182e+000, 2.459331e-003, 1.633217e-003,
+		6.525023e-004, 1.013484e+000, -3.232950e-003,
+					  -6.010459e-004, -2.420502e-002, 9.999996e-001;
 		// for Shen Chenlong
 		//a = (cv::Mat_<double>(3,3)<<
 		//						  1.160721381656755, -0.008292699626746215, -40.02850611710956,
@@ -60,12 +60,12 @@ void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eige
 	{
 		for (int j = 0; j < currImage.cols; j++)
 		{
-			input(0) = j;input(1) = i;
+			input(0) = j;input(1) = i;input(2) = 1;
 			//std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
-			Eigen::Vector3d tmp = h*input.homogeneous();
-			tmp = tmp/tmp(2);
-			res <<tmp(0), tmp(1);
-			//res = a.inv()*input;
+			res = h*input;
+			//res = res/res(2);
+			//res = h.inverse()*input;
+			//res = res/res(2);
 			//std::cout<<"before regulation:"<<res<<std::endl;
 			//std::cout<<"after regulation:"<<res<<std::endl;
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)

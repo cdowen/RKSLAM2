@@ -138,10 +138,10 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d h)
 		{
 			cv::Point2f pt2 = fr2->keypoints[j].pt;
 			Eigen::Vector2d tmp(pt2.x, pt2.y);
-			if (((hinv*tmp.homogeneous()).hnormalized()-kpl).squaredNorm()>reprojError)
-			{
-				continue;
-			}
+			//if (((hinv*tmp.homogeneous()).hnormalized()-kpl).squaredNorm()>reprojError)
+			//{
+			//	continue;
+			//}
 			if (abs(ppl(0) - pt2.x)<globalSearchHalfLength&&abs(ppl(1)-pt2.y)<globalSearchHalfLength)
 			{
 				int u = pt2.y-patchHalfSize;int d = pt2.y+patchHalfSize;int l = pt2.x-patchHalfSize;int r = pt2.x+patchHalfSize;
