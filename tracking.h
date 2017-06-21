@@ -4,6 +4,7 @@
 #include "Frame.h"
 #include "KeyFrame.h"
 #include "Initialization.h"
+class LocalMap;
 class Optimizer;
 class Tracking
 {
@@ -24,6 +25,7 @@ public:
 	Frame* currFrame, *lastFrame;
 	cv::Mat mK;
 	bool DecideKeyFrame(const Frame* fr1);
+	LocalMap* localMap;
 
 private:
 	void LoadImages(const std::string &strFile, std::vector<std::string> &vstrImageFilenames,

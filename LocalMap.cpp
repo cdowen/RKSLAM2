@@ -48,8 +48,8 @@ double LocalMap::ComputeParallax(cv::KeyPoint kp1, cv::KeyPoint kp2, KeyFrame *k
 {
 	cv::Mat keypoint1=(cv::Mat_<double >(3,1)<< kp1.pt.x,kp1.pt.y,1);
 	cv::Mat keypoint2=(cv::Mat_<double >(3,1)<< kp2.pt.x,kp2.pt.y,1);
-	cv::Mat mR1=kf1->mTcw.rowRange(0,4).colRange(0,4);
-	cv::Mat mR2=fr2->mTcw.rowRange(0,4).colRange(0,4);
+	cv::Mat mR1=kf1->mTcw.rowRange(0,3).colRange(0,3);
+	cv::Mat mR2=fr2->mTcw.rowRange(0,3).colRange(0,3);
 
 	cv::Mat r1=mR1.t()*mK.inv()*keypoint1;
 	cv::Mat r2=mR2.t()*mK.inv()*keypoint2;
@@ -67,8 +67,8 @@ MapPoint* LocalMap::Triangulation(cv::KeyPoint kp1, cv::KeyPoint kp2,KeyFrame *k
 {
 	cv::Mat A(4,4,CV_64F);
 
-	cv::Mat P1=mK*kf1->mTcw;
-	cv::Mat P2=mK*fr2->mTcw;
+	cv::Mat P1=mK*kf1->mTcw.rowRange(0,3);
+	cv::Mat P2=mK*fr2->mTcw.rowRange(0,3);
 	A.row(0) = kp1.pt.x*P1.row(2)-P1.row(0);
 	A.row(1) = kp1.pt.y*P1.row(2)-P1.row(1);
 	A.row(2) = kp2.pt.x*P2.row(2)-P2.row(0);
@@ -87,23 +87,30 @@ MapPoint* LocalMap::Triangulation(cv::KeyPoint kp1, cv::KeyPoint kp2,KeyFrame *k
 
 MapPoint* LocalMap::GetPositionByOptimization(cv::KeyPoint kp1, cv::KeyPoint kp2, KeyFrame *kf1, Frame *fr2)
 {
+	//TODO: fix bug
 	MapPoint* MP=new MapPoint();
-	cv::Mat keypoint1=(cv::Mat_<float >(3,1)<< kp1.pt.x,kp1.pt.y,1);
+	cv::Mat keypoint1=(cv::Mat_<double >(3,1)<< kp1.pt.x,kp1.pt.y,1);
 
 	//choose the mean depth value d of keyframe kf1 to initialize mappoint.
 	double SumDepth=0;
+	int length = 0;
 	for(std::vector<MapPoint*>::iterator vit=kf1->mappoints.begin(),vend=kf1->mappoints.end();vit!=vend;vit++)
 	{
 		MapPoint* mMP=*vit;
+		if (mMP== nullptr)
+		{
+			continue;
+		}
 		cv::Mat Coordinate(4,1,CV_64F,1);
 		Coordinate.rowRange(0,3)=mMP->Tw;
 		Coordinate= kf1->mTcw*Coordinate;
 		double d =Coordinate.at<double>(2);
 		SumDepth += d;
+		length++;
 	}
-	double MeanDepth=SumDepth/kf1->mappoints.size();
+	double MeanDepth=SumDepth/length;
 
-	MP->Tw=MeanDepth*kf1->mTcw.t()*mK.inv()*keypoint1;
+	MP->Tw=MeanDepth*mK.inv()*keypoint1;
 
 	//optimize.
 		//Initialize g2o.
@@ -131,10 +138,10 @@ MapPoint* LocalMap::GetPositionByOptimization(cv::KeyPoint kp1, cv::KeyPoint kp2
 		 	fr2->mTcw.at<double>(0,0),fr2->mTcw.at<double>(0,1),fr2->mTcw.at<double>(0,2),
 			fr2->mTcw.at<double>(1,0),fr2->mTcw.at<double>(1,1),fr2->mTcw.at<double>(1,2),
 			fr2->mTcw.at<double>(2,0),fr2->mTcw.at<double>(2,1),fr2->mTcw.at<double>(2,2);
-	pose1->setId(1);
-	pose1->setEstimate(g2o::SE3Quat(R_mat2,Eigen::Vector3d(fr2->mTcw.at<double>(0,3),fr2->mTcw.at<double>(1,3),fr2->mTcw.at<double>(2,3))));
-	pose1->setFixed(true);
-	optimizer.addVertex(pose1);
+	pose2->setId(1);
+	pose2->setEstimate(g2o::SE3Quat(R_mat2,Eigen::Vector3d(fr2->mTcw.at<double>(0,3),fr2->mTcw.at<double>(1,3),fr2->mTcw.at<double>(2,3))));
+	pose2->setFixed(true);
+	optimizer.addVertex(pose2);
 
 		//set vertices:3D features.
 	g2o::VertexSBAPointXYZ* point=new g2o::VertexSBAPointXYZ();
@@ -154,6 +161,7 @@ MapPoint* LocalMap::GetPositionByOptimization(cv::KeyPoint kp1, cv::KeyPoint kp2
 	edge1->setVertex(1,pose1);
 	edge1->setMeasurement(Eigen::Vector2d(kp1.pt.x,kp1.pt.y));
 	edge1->setInformation(Eigen::Matrix2d::Identity());
+	edge1->setParameterId(0,0);
 	optimizer.addEdge(edge1);
 	g2o::EdgeProjectXYZ2UV* edge2=new g2o::EdgeProjectXYZ2UV();
 	edge2->setId(2);
@@ -161,6 +169,7 @@ MapPoint* LocalMap::GetPositionByOptimization(cv::KeyPoint kp1, cv::KeyPoint kp2
 	edge2->setVertex(1,pose2);
 	edge2->setMeasurement(Eigen::Vector2d(kp2.pt.x,kp2.pt.y));
 	edge2->setInformation(Eigen::Matrix2d::Identity());
+	edge2->setParameterId(0,0);
 	optimizer.addEdge(edge2);
 
 		//optimize!

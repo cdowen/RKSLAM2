@@ -101,7 +101,6 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 	cv::Mat xgradient, ygradient;
 	im1.convertTo(im1, CV_64FC1);
 	im2.convertTo(im2, CV_64FC1);
-	std::cout<<"im2 avg:"<<cv::mean(im2)[0]<<"\n";
 	im1 = im1-cv::mean(im1)[0];
 	im2 = im2-cv::mean(im2)[0];
 

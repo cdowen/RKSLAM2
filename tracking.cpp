@@ -31,6 +31,7 @@ void Tracking::Run(std::string pathtoData)
 	cv::Mat generateImage(cv::Mat image);
 	//testProjection(NULL, NULL);
 	//Load Images.
+	localMap = new LocalMap(this);
 	std::vector<std::string> vstrImageFilenames;
 	std::vector<double> vTimestamps;
 	std::string strFile=pathtoData+"/rgb.txt";
@@ -266,11 +267,35 @@ void Tracking::Run(std::string pathtoData)
 					}
 				}
 				auto Tcw = Optimizer::PoseEstimation(currFrame);
-				// TODO: new 3D points should be triangulated here.
+
 				g2o::SE3Quat t;
 				t.fromVector(Tcw);
 				cv::eigen2cv(t.to_homogeneous_matrix(), currFrame->mTcw);
+				for (auto it = currFrame->matchedGroup.begin();it!=currFrame->matchedGroup.end();it++)
+				{
+					Frame* kf = it->first;
+					for (auto it2 = it->second.begin();it2!=it->second.end();it2++)
+					{
+						currFrame->mappoints[it2->first] = kf->mappoints[it2->second];
+						if (kf->mappoints[it2->second]== nullptr)
+						{
+							double par = localMap->ComputeParallax(kf->keypoints[it2->second], currFrame->keypoints[it2->first],
+																   static_cast<KeyFrame*>(kf), currFrame);
+							if (par>1)
+							{
+								kf->mappoints[it2->second] = localMap->Triangulation(kf->keypoints[it2->second], currFrame->keypoints[it2->first],
+																					 static_cast<KeyFrame*>(kf), currFrame);
 
+							}
+							else
+							{
+								kf->mappoints[it2->second] = localMap->GetPositionByOptimization(kf->keypoints[it2->second], currFrame->keypoints[it2->first],
+																								 static_cast<KeyFrame*>(kf), currFrame);
+							}
+						}
+						kf->mappoints[it2->second]->allObservation.insert(std::make_pair(currFrame, &currFrame->keypoints[it2->first]));
+					}
+				}
 				if (DecideKeyFrame(lastFrame))
 				{
 					std::cout<<"new keyframe selected"<<"\n";
