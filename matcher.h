@@ -12,7 +12,7 @@ public:
 	std::map<int ,int > SearchForInitialization( Frame* fr1, Frame* fr2);
 	int SearchMatchByGlobal(Frame *fr1, std::map<KeyFrame *, Eigen::Matrix3d> globalH);
 	int SearchMatchByLocal(Frame* currFrame, std::vector<KeyFrame*> kfs);
-	std::map<int,int> matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d H);
+	std::map<int,int> matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& H);
 	int MatchByLocalH(Frame *currFrame, KeyFrame *kfs);
 
 private:
@@ -22,7 +22,7 @@ private:
   	const double globalSearchHalfLength = 5;
 	const double InitSearchHalfLength=15;
   	const int patchHalfSize = 4;
-	const double reprojError = 4;
+	const double reprojError = 16;
 
 
 };

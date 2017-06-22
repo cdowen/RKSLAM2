@@ -226,6 +226,7 @@ void Tracking::Run(std::string pathtoData)
 			if(mState==OK)
 			{
 				std::cout<<"Tracking..."<<std::endl;
+
 				cv::FAST(currFrame->image, currFrame->keypoints, 20);
 				Map* map = Map::getInstance();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
@@ -296,7 +297,7 @@ void Tracking::Run(std::string pathtoData)
 						kf->mappoints[it2->second]->allObservation.insert(std::make_pair(currFrame, &currFrame->keypoints[it2->first]));
 					}
 				}
-				if (DecideKeyFrame(lastFrame))
+				if (DecideKeyFrame(lastFrame, matchKfNum))
 				{
 					std::cout<<"new keyframe selected"<<"\n";
 					map->addKeyFrame(static_cast<KeyFrame*>(lastFrame));
@@ -374,7 +375,7 @@ void Tracking::LoadImages(const std::string &strFile, std::vector<std::string> &
 	}
 }
 
-bool Tracking::DecideKeyFrame(const Frame* currFrame)
+bool Tracking::DecideKeyFrame(const Frame* currFrame, int count)
 {
 	if (this->mState!=Tracking::OK)
 	{
@@ -391,6 +392,6 @@ bool Tracking::DecideKeyFrame(const Frame* currFrame)
 	cv::cv2eigen(a, t1);
 	//TODO: suitable threshold for comparison
 	cv::cv2eigen(currFrame->mTcw, t2);
-	return (t1.col(3).hnormalized()-t2.col(3).hnormalized()).squaredNorm()>0.1;
+	return (t1.col(3).hnormalized()-t2.col(3).hnormalized()).squaredNorm()>0.1||count<50;
 }
 

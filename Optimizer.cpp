@@ -47,7 +47,7 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
 	action->setGainThreshold(0.01);
-	action->setMaxIterations(0);
+	action->setMaxIterations(10);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -108,8 +108,7 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 	Sobel(im2, ygradient, CV_64FC1, 0, 1, 1);
 
 	g2o::SparseOptimizer optimizer;
-	BlockSolver_9_1::LinearSolverType * linearSolver;
-	linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
+	BlockSolver_9_1::LinearSolverType * linearSolver = new g2o::LinearSolverDense<BlockSolver_9_1::PoseMatrixType>();
 
 	BlockSolver_9_1 * solver_ptr = new BlockSolver_9_1(linearSolver);
 
@@ -118,8 +117,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.00001);
-	action->setMaxIterations(20);
+	action->setGainThreshold(0.001);
+	action->setMaxIterations(8);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -182,6 +181,12 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( solver_ptr );
 	g2o::SparseOptimizer optimizer;
 	optimizer.setAlgorithm ( solver );
+
+	g2o::SparseOptimizerTerminateAction* action;
+	action = new g2o::SparseOptimizerTerminateAction();
+	action->setGainThreshold(0.001);
+	action->setMaxIterations(8);
+	optimizer.addPostIterationAction(action);
 
 	// vertex
 	g2o::VertexSE3Expmap* pose = new g2o::VertexSE3Expmap(); // camera pose

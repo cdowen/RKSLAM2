@@ -24,7 +24,7 @@ public:
 	std::vector<KeyFrame*> SearchTopOverlapping();
 	Frame* currFrame, *lastFrame;
 	cv::Mat mK;
-	bool DecideKeyFrame(const Frame* fr1);
+	bool DecideKeyFrame(const Frame* fr1, int count);
 	LocalMap* localMap;
 
 private:

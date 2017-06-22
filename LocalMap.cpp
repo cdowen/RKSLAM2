@@ -4,13 +4,14 @@
 
 #include "LocalMap.h"
 #include "g2o/core/block_solver.h"
-#include "g2o/solvers/csparse/linear_solver_csparse.h"
+#include <g2o/solvers/dense/linear_solver_dense.h>
 #include "g2o/core/optimization_algorithm_levenberg.h"
 #include "g2o/types/sba/types_six_dof_expmap.h"
 #include "Map.h"
 #include <chrono>
 #include <vector>
 #include <opencv2/core/eigen.hpp>
+#include <g2o/solvers/csparse/linear_solver_csparse.h>
 
 LocalMap::LocalMap(Tracking* tracking)
 {
@@ -87,104 +88,79 @@ MapPoint* LocalMap::Triangulation(cv::KeyPoint kp1, cv::KeyPoint kp2,KeyFrame *k
 
 MapPoint* LocalMap::GetPositionByOptimization(cv::KeyPoint kp1, cv::KeyPoint kp2, KeyFrame *kf1, Frame *fr2)
 {
-	//TODO: fix bug
-	MapPoint* MP=new MapPoint();
-	cv::Mat keypoint1=(cv::Mat_<double >(3,1)<< kp1.pt.x,kp1.pt.y,1);
-
-	//choose the mean depth value d of keyframe kf1 to initialize mappoint.
-	double SumDepth=0;
-	int length = 0;
-	for(std::vector<MapPoint*>::iterator vit=kf1->mappoints.begin(),vend=kf1->mappoints.end();vit!=vend;vit++)
+	double meandepth = 0;
+	int count = 0;
+	Eigen::Map<Eigen::Matrix<double, 4,4,Eigen::RowMajor>> kfTcw((double*)kf1->mTcw.data);
+	Eigen::Map<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> cufTcw((double*)fr2->mTcw.data);
+	Eigen::Map<Eigen::Matrix<double, 3,3,Eigen::RowMajor>> K((double*)mK.data);
+	for (auto it:kf1->mappoints)
 	{
-		MapPoint* mMP=*vit;
-		if (mMP== nullptr)
+		if (it!= nullptr)
 		{
-			continue;
+			Eigen::Map<Eigen::Vector3d> loc((double*)it->Tw.data);
+			meandepth+=(kfTcw*loc.homogeneous()).hnormalized()[2];
+			count++;
 		}
-		cv::Mat Coordinate(4,1,CV_64F,1);
-		Coordinate.rowRange(0,3)=mMP->Tw;
-		Coordinate= kf1->mTcw*Coordinate;
-		double d =Coordinate.at<double>(2);
-		SumDepth += d;
-		length++;
 	}
-	double MeanDepth=SumDepth/length;
+	meandepth = meandepth/count;
+	Eigen::Vector2d kp(kp1.pt.x, kp1.pt.y);
+	Eigen::Vector3d initX = meandepth*K.inverse()*kp.homogeneous();
 
-	MP->Tw=MeanDepth*mK.inv()*keypoint1;
-
-	//optimize.
-		//Initialize g2o.
-	typedef g2o::BlockSolver_6_3 Block;
-	Block::LinearSolverType* linearSolver=new g2o::LinearSolverCSparse<Block::PoseMatrixType>();
+	//Setup g2o
+	//TODO:BlockSolverX may hide unknown error below.
+	typedef g2o::BlockSolverX Block;
+	Block::LinearSolverType* linearSolver = new g2o::LinearSolverDense<Block::PoseMatrixType>();
 	Block* solver_ptr=new Block(linearSolver);
-	g2o::OptimizationAlgorithmLevenberg* algorithmLevenberg=new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
+	g2o::OptimizationAlgorithmLevenberg* solver=new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 	g2o::SparseOptimizer optimizer;
-	optimizer.setAlgorithm(algorithmLevenberg);
+	optimizer.setAlgorithm(solver);
 
-		//set vertex:camera pose.
-	g2o::VertexSE3Expmap* pose1 =new g2o::VertexSE3Expmap();
-	Eigen::Matrix3d R_mat;
-	R_mat<<
-		 	kf1->mTcw.at<double>(0,0),kf1->mTcw.at<double>(0,1),kf1->mTcw.at<double>(0,2),
-			kf1->mTcw.at<double>(1,0),kf1->mTcw.at<double>(1,1),kf1->mTcw.at<double>(1,2),
-			kf1->mTcw.at<double>(2,0),kf1->mTcw.at<double>(2,1),kf1->mTcw.at<double>(2,2);
-	pose1->setId(0);
-	pose1->setEstimate(g2o::SE3Quat(R_mat,Eigen::Vector3d(kf1->mTcw.at<double>(0,3),kf1->mTcw.at<double>(1,3),kf1->mTcw.at<double>(2,3))));
-	pose1->setFixed(true);
-	optimizer.addVertex(pose1);
-	g2o::VertexSE3Expmap* pose2 =new g2o::VertexSE3Expmap();
-	Eigen::Matrix3d R_mat2;
-	R_mat2<<
-		 	fr2->mTcw.at<double>(0,0),fr2->mTcw.at<double>(0,1),fr2->mTcw.at<double>(0,2),
-			fr2->mTcw.at<double>(1,0),fr2->mTcw.at<double>(1,1),fr2->mTcw.at<double>(1,2),
-			fr2->mTcw.at<double>(2,0),fr2->mTcw.at<double>(2,1),fr2->mTcw.at<double>(2,2);
-	pose2->setId(1);
-	pose2->setEstimate(g2o::SE3Quat(R_mat2,Eigen::Vector3d(fr2->mTcw.at<double>(0,3),fr2->mTcw.at<double>(1,3),fr2->mTcw.at<double>(2,3))));
-	pose2->setFixed(true);
-	optimizer.addVertex(pose2);
+	g2o::VertexSE3Expmap* pos = new g2o::VertexSE3Expmap();
+	pos->setId(0);
 
-		//set vertices:3D features.
-	g2o::VertexSBAPointXYZ* point=new g2o::VertexSBAPointXYZ();
-	point->setId(2);
-	point->setEstimate(Eigen::Vector3d(MP->Tw.at<double>(0),MP->Tw.at<double>(1),MP->Tw.at<double>(2)));
-	optimizer.addVertex(point);
+	pos->setEstimate(g2o::SE3Quat(kfTcw.topLeftCorner(3,3), kfTcw.topRightCorner(3,1)));
+	pos->setFixed(true);
+	optimizer.addVertex(pos);
 
-		//set parameter:camera intrinsic.
+	g2o::VertexSE3Expmap* pos2 = new g2o::VertexSE3Expmap();
+	pos2->setId(1);
+	pos2->setEstimate(g2o::SE3Quat(cufTcw.topLeftCorner(3,3), cufTcw.topRightCorner(3,1)));
+	pos2->setFixed(true);
+	optimizer.addVertex(pos2);
+
+	g2o::VertexSBAPointXYZ *landmark = new g2o::VertexSBAPointXYZ();
+	landmark->setId(2);
+	landmark->setEstimate(initX);
+	optimizer.addVertex(landmark);
+
 	g2o::CameraParameters* camera=new g2o::CameraParameters(mK.at<double>(0,0),Eigen::Vector2d(mK.at<double>(0,2),mK.at<double>(1,2)),0);
 	camera->setId(0);
 	optimizer.addParameter(camera);
 
-		//set edges.
+	//set edges.
 	g2o::EdgeProjectXYZ2UV* edge1=new g2o::EdgeProjectXYZ2UV();
 	edge1->setId(1);
-	edge1->setVertex(0,point);
-	edge1->setVertex(1,pose1);
+	edge1->setVertex(0,landmark);
+	edge1->setVertex(1,pos);
 	edge1->setMeasurement(Eigen::Vector2d(kp1.pt.x,kp1.pt.y));
-	edge1->setInformation(Eigen::Matrix2d::Identity());
 	edge1->setParameterId(0,0);
+	edge1->setInformation(Eigen::Matrix2d::Identity());
 	optimizer.addEdge(edge1);
 	g2o::EdgeProjectXYZ2UV* edge2=new g2o::EdgeProjectXYZ2UV();
 	edge2->setId(2);
-	edge2->setVertex(0,point);
-	edge2->setVertex(1,pose2);
+	edge2->setVertex(0,landmark);
+	edge2->setVertex(1,pos2);
 	edge2->setMeasurement(Eigen::Vector2d(kp2.pt.x,kp2.pt.y));
-	edge2->setInformation(Eigen::Matrix2d::Identity());
 	edge2->setParameterId(0,0);
+	edge2->setInformation(Eigen::Matrix2d::Identity());
 	optimizer.addEdge(edge2);
 
-		//optimize!
-	std::chrono::steady_clock::time_point t1=std::chrono::steady_clock::now();
-	optimizer.setVerbose(true);
 	optimizer.initializeOptimization();
-	optimizer.optimize(100);
-	std::chrono::steady_clock::time_point t2=std::chrono::steady_clock::now();
-	std::chrono::duration<double > time_used=std::chrono::duration_cast<std::chrono::duration<double>>(t2-t1);
-	std::cout<<"3D point initialization by optimization costs time: "<<time_used.count()<<" seconds\n";
-
-	//Recover the optimized point.
-	g2o::VertexSBAPointXYZ* vPoint=static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(2));
-	MP->Tw<<(vPoint->estimate())(0),(vPoint->estimate())(1),(vPoint->estimate())(2);
-	return MP;
+	optimizer.optimize(20);
+	MapPoint* mp = new MapPoint();
+	cv::eigen2cv(landmark->estimate(), mp->Tw);
+	//std::cout<<"mappoint:"<<landmark->estimate()<<std::endl;
+	return mp;
 }
 
 void LocalMap::LocalOptimize(Frame *fr1)
