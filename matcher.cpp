@@ -137,11 +137,6 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
 			cv::Point2f pt2 = fr2->keypoints[j].pt;
-			Eigen::Vector2d tmp(pt2.x, pt2.y);
-			if ((ppl-tmp).squaredNorm()>reprojError)
-			{
-				continue;
-			}
 			//if (((hinv*tmp.homogeneous()).hnormalized()-kpl).squaredNorm()>reprojError)
 			//{
 			//	continue;
@@ -154,7 +149,7 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 					continue;
 				}
 				cv::Mat patch = fr2->image.rowRange(pt2.y - patchHalfSize, pt2.y + patchHalfSize).colRange(pt2.x - patchHalfSize, pt2.x + patchHalfSize);
-				cv::absdiff(warped, patch, differ);
+				cv::absdiff(warped-cv::mean(warped), patch-cv::mean(patch), differ);
 				differ = differ&(warped!=0);
 				int ssdError = differ.dot(differ);
 				ssdError = ssdError/warpedSize;

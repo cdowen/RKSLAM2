@@ -22,7 +22,7 @@ private:
   	const double globalSearchHalfLength = 5;
 	const double InitSearchHalfLength=15;
   	const int patchHalfSize = 4;
-	const double reprojError = 16;
+	const double reprojError = 8;
 
 
 };
