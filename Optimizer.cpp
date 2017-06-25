@@ -46,8 +46,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.01);
-	action->setMaxIterations(10);
+	action->setGainThreshold(0.001);
+	action->setMaxIterations(50);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -117,12 +117,21 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.001);
-	action->setMaxIterations(8);
+	action->setGainThreshold(0.0001);
+	action->setMaxIterations(10);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
-	vSL3->setEstimate(Eigen::Matrix3d::Identity());
+
+	auto hit = fr2->keyFrameSet.find(kf);
+	if (hit!=fr2->keyFrameSet.end())
+	{
+		vSL3->setEstimate(hit->second);
+	}
+	else
+	{
+		vSL3->setEstimate(Eigen::Matrix3d::Identity());
+	}
 	vSL3->setId(0);
 	optimizer.addVertex(vSL3);
 
@@ -164,10 +173,10 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 		optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
-	//optimizer.setVerbose(true);
+	optimizer.setVerbose(true);
 	optimizer.optimize(50);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
-	fr2->keyFrameSet.insert(std::make_pair(kf, sl3d->estimate()));
+	fr2->keyFrameSet[kf] = sl3d->estimate();
 	std::cout << "optimize with keypoint:"<< sl3d->estimate() << "\n";
 	return sl3d->estimate();
 }

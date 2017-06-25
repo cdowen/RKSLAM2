@@ -226,29 +226,28 @@ void Tracking::Run(std::string pathtoData)
 			if(mState==OK)
 			{
 				std::cout<<"Tracking..."<<std::endl;
-
 				cv::FAST(currFrame->image, currFrame->keypoints, 20);
 				Map* map = Map::getInstance();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
-				//testProjection(lastFrame, currFrame, a);
 				std::map<int,int>matches;
-				//findCorrespondenceByKp(lastFrame, currFrame,matches);
 				std::vector<KeyFrame*> kfs = SearchTopOverlapping();
 				std::map<KeyFrame*, Eigen::Matrix3d> khs;
 				for (int i = 0;i<kfs.size();i++)
 				{
 					Eigen::Matrix3d b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
-					//findCorrespondenceByKp(kfs[i], lastFrame);
-					//void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<cv::KeyPoint*, cv::KeyPoint*> matches);
-					//drawMatch(kfs[i], lastFrame, lastFrame->matchedGroup[kfs[i]]);
 					Eigen::Matrix3d c = b*a;
-					//testProjection(kfs[i], currFrame, c);
+					c = c/c(2,2);
 					khs.insert(std::make_pair(kfs[i], c));
 				}
+				if (std::find(map->allKeyFrame.begin(), map->allKeyFrame.end(), lastFrame)!=map->allKeyFrame.end())
+				{
+					khs.insert(std::make_pair(static_cast<KeyFrame*>(lastFrame), a));
+				}
+				currFrame->keyFrameSet = khs;
 				Matcher match;
 				int matchKfNum = match.SearchMatchByGlobal(currFrame, khs);
 				std::cout<<"Matched points with keyframe:"<<matchKfNum<<"\n";
-				if (matchKfNum<50)
+				if (matchKfNum<100)
 				{
 					std::cout << "Matched points with local homo:" << match.SearchMatchByLocal(currFrame, kfs) << "\n";
 				}
@@ -267,8 +266,9 @@ void Tracking::Run(std::string pathtoData)
 						}
 					}
 				}
+				// Pose estimation
 				auto Tcw = Optimizer::PoseEstimation(currFrame);
-
+				// Mappoint creation
 				g2o::SE3Quat t;
 				t.fromVector(Tcw);
 				cv::eigen2cv(t.to_homogeneous_matrix(), currFrame->mTcw);
@@ -297,14 +297,10 @@ void Tracking::Run(std::string pathtoData)
 						kf->mappoints[it2->second]->allObservation.insert(std::make_pair(currFrame, &currFrame->keypoints[it2->first]));
 					}
 				}
-				if (DecideKeyFrame(lastFrame, matchKfNum))
+				if (DecideKeyFrame(currFrame, matchKfNum))
 				{
 					std::cout<<"new keyframe selected"<<"\n";
-					map->addKeyFrame(static_cast<KeyFrame*>(lastFrame));
-					// add link to new keyframe so that it will be used in tracking.
-					std::map<KeyFrame*, Eigen::Matrix3d> mmap;
-					mmap.insert(std::make_pair(static_cast<KeyFrame*>(lastFrame), a));
-					match.SearchMatchByGlobal(currFrame, mmap);
+					map->addKeyFrame(static_cast<KeyFrame*>(currFrame));
 				}
 			}
 		}
@@ -319,6 +315,7 @@ void Tracking::Run(std::string pathtoData)
 std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
 {
 	const int MAX_KEYFRAME_COUNT = 5;
+	const int MIN_MATCH_COUNT = 20;
 	std::map<KeyFrame*, int> kfv;
 	for (auto mit = lastFrame->matchedGroup.begin();mit!=lastFrame->matchedGroup.end();mit++)
 	{
@@ -336,6 +333,10 @@ std::vector<KeyFrame*> Tracking::SearchTopOverlapping()
 				max_v = it->second;
 				max_kf = it->first;
 			}
+		}
+		if (max_v<MIN_MATCH_COUNT)
+		{
+			break;
 		}
 		if (max_kf != nullptr)
 		{
