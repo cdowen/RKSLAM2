@@ -21,8 +21,6 @@ private:
   std::vector<cv::Point2f> mMatchedKeys1; std::vector<cv::Point2f> mMatchedKeys2;
   cv::Mat InlierH; cv::Mat InlierE;
   cv::Mat mK;
-  cv::Mat R; cv::Mat t;
-  int MaxIterations;
   
 
   //Compute Homography between source and destination planes. mvKeys1=H21*mvKeys2.
@@ -38,7 +36,7 @@ private:
   
   // Check R&t by computing triangulated points and its parallax. Return the number of visible 3Dpoints.
   // Maximum allowed reprojection error to treat a point pair as an inlier: 2 pixel.
-  int CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesInliers, std::vector<cv::Point3d> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax);
+  int CheckRT(const cv::Mat R, const cv::Mat t, const cv::Mat n,const double d, cv::Mat vbMatchesInliers, std::vector<cv::Point3d> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax);
   //Triangulate 3Dpoints
   void Triangulate(const cv::Point2f pt1, const cv::Point2f pt2, const cv::Mat P1, const cv::Mat P2, cv::Mat &x3D);
   //decompose EssentialMat for R and t.
