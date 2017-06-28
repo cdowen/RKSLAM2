@@ -2,6 +2,18 @@
 #include <thread>
 #include <iostream>
 #include "tracking.h"
+#include <Eigen/Dense>
+#include <opencv/cxeigen.hpp>
+
+enum Method{
+    ORB_SLAM=0,
+    SVO=1,
+    SVO_with_1988=2,
+    VINS_Mono=3
+};
+Method method=SVO_with_1988;
+
+
 //return the type of opencv paraments.
 std::string type2str(int type) {
   std::string r;
@@ -27,16 +39,15 @@ std::string type2str(int type) {
 }
 
 Initialization::Initialization(Tracking* tracking, Frame* ReferenceFrame)
-{
-  //for test.
-    _ReferenceFrame=ReferenceFrame;
+{ _ReferenceFrame=ReferenceFrame;
   mK=tracking->mK;
 }
 
 
 bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& MatchedPoints, cv::Mat& R21, cv::Mat& t21,std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated)
 {
-	mvKeys1=_ReferenceFrame->keypoints;
+
+    mvKeys1=_ReferenceFrame->keypoints;
 	mvKeys2=CurrentFrame.keypoints;
   mMatchedKeys1.clear(); mMatchedKeys2.clear();
   for(int i=0;i<mvKeys1.size();i++)
@@ -54,37 +65,6 @@ bool Initialization::Initialize(const Frame& CurrentFrame, std::map<int,int>& Ma
      std::thread threadE(&Initialization::FindEssentialMat,this,std::ref(SE), std::ref(E));
      threadH.join();
      threadE.join();
-
-
-    //for test.
-    /*cv::Mat ProjectedFrame=cv::Mat(CurrentFrame.image.size(),CV_8UC1,cv::Scalar(0));
-    cv::Mat_<double> point=cv::Mat(3,1,CV_64FC1);
-    cv::Mat_<double> result=cv::Mat(3,1,CV_64FC1);
-    for (int intx = 0; intx <CurrentFrame.image.cols ; ++intx)
-    {
-        for (int inty = 0; inty <CurrentFrame.image.rows ; ++inty)
-        {
-            point(0)=intx;point(1)=inty;point(2)=1;
-            result=H*point;
-            result=result/result(2);
-            if (result(0)>0&&result(0)<CurrentFrame.image.size().width&&result(1)>0&&result(1)<CurrentFrame.image.size().height)
-            {
-                ProjectedFrame.at<uint8_t>(result(1),result(0))=_ReferenceFrame.image.at<uint8_t>(inty,intx);
-            }
-        }
-    }
-
-    cv::Mat resultImg;
-    cv::addWeighted(CurrentFrame.image,0.5,ProjectedFrame,0.5,0.5,resultImg);
-    cv::imshow("Project_Result",ProjectedFrame);
-    cv::imshow("CurrentFrme",CurrentFrame.image);
-    cv::imshow("ReferenceFrame",_ReferenceFrame.image);
-    cv::Mat differ;
-    cv::absdiff(ProjectedFrame, CurrentFrame.image, differ);
-    differ = differ&(ProjectedFrame!=0);
-    double error = differ.dot(differ);
-    std::cout<<error/1200<<"\n";
-    cv::waitKey(0);*/
 
     // Compute ratio of scores
      float SCORE=SH/(SH+SE);
@@ -142,20 +122,20 @@ void Initialization::FindEssentialMat(float& score, cv::Mat& E21)
 bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated, double minParallax, int minTriangulated)
 {
   std::cout<<"Initialize pose with recovery from Homography..."<<std::endl;
-  
+
   // We recover 8 motion hypotheses using the method of Faugeras et al.
   // Motion and structure from motion in a piecewise planar environment.
   // International Journal of Pattern Recognition and Artificial Intelligence, 1988
-  
+
   cv::Mat invK = mK.inv();
   cv::Mat A = invK*Homography*mK;
-      
+
   cv::Mat U,w,Vt,V;
   cv::SVD::compute(A,w,U,Vt,cv::SVD::FULL_UV);
   V=Vt.t();
 
   float s = cv::determinant(U)*cv::determinant(Vt);
-  
+
   double d1 = w.at<double>(0);
   double d2 = w.at<double>(1);
   double d3 = w.at<double>(2);
@@ -164,12 +144,15 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
    {
      return false;
    }
-  
+
   //8 motion hypotheses.
   std::vector<cv::Mat> vR, vt, vn;
+    std::vector<double >d;//My
   vR.reserve(8);
   vt.reserve(8);
   vn.reserve(8);
+  d.resize(8);//My
+    d[0]=d[1]=d[2]=d[3]=s*d2;d[4]=d[5]=d[6]=d[7]=-s*d2;
 
   //for every d', n'=[x1 0 x3] 4 posibilities e1=e3=1, e1=1 e3=-1, e1=-1 e3=1, e1=e3=-1
   double aux1 = sqrt((d1*d1-d2*d2)/(d1*d1-d3*d3));
@@ -207,8 +190,16 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
         np.at<double>(2)=x3[i];
 
         cv::Mat n = V*np;
-        if(n.at<double>(2)<0)
-            n=-n;
+        if (method==ORB_SLAM)
+        {
+            if(n.at<double>(2)<0)
+                n=-n;
+        }
+        if (method==SVO_with_1988)
+        {
+            if(n.at<double>(2)>0)
+                n=-n;
+        }
         vn.push_back(n);
     }
 
@@ -217,41 +208,50 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
   double cphi = (d1*d3-d2*d2)/((d1-d3)*d2);
   double sphi[] = {aux_sphi, -aux_sphi, -aux_sphi, aux_sphi};
   for(int i=0; i<4; i++)
-    {
-        cv::Mat Rp=cv::Mat::eye(3,3,CV_64F);
-        Rp.at<double>(0,0)=cphi;
-        Rp.at<double>(0,2)=sphi[i];
-        Rp.at<double>(1,1)=-1;
-        Rp.at<double>(2,0)=sphi[i];
-        Rp.at<double>(2,2)=-cphi;
+  {
+      cv::Mat Rp=cv::Mat::eye(3,3,CV_64F);
+      Rp.at<double>(0,0)=cphi;
+      Rp.at<double>(0,2)=sphi[i];
+      Rp.at<double>(1,1)=-1;
+      Rp.at<double>(2,0)=sphi[i];
+      Rp.at<double>(2,2)=-cphi;
 
-        cv::Mat R = s*U*Rp*Vt;
-        vR.push_back(R);
+      cv::Mat R = s*U*Rp*Vt;
+      vR.push_back(R);
 
-        cv::Mat tp(3,1,CV_64F);
-        tp.at<double>(0)=x1[i];
-        tp.at<double>(1)=0;
-        tp.at<double>(2)=x3[i];
-        tp*=d1+d3;
+      cv::Mat tp(3,1,CV_64F);
+      tp.at<double>(0)=x1[i];
+      tp.at<double>(1)=0;
+      tp.at<double>(2)=x3[i];
+      tp*=d1+d3;
 
-        cv::Mat t = U*tp;
-        vt.push_back(t/cv::norm(t));
+      cv::Mat t = U*tp;
+      vt.push_back(t/cv::norm(t));
 
-        cv::Mat np(3,1,CV_64F);
-        np.at<double>(0)=x1[i];
-        np.at<double>(1)=0;
-        np.at<double>(2)=x3[i];
+      cv::Mat np(3,1,CV_64F);
+      np.at<double>(0)=x1[i];
+      np.at<double>(1)=0;
+      np.at<double>(2)=x3[i];
 
-        cv::Mat n = V*np;
-        if(n.at<double>(2)<0)
-            n=-n;
-        vn.push_back(n);
-    }
+      cv::Mat n =  V*np;
+      if (method==ORB_SLAM)
+      {
+          if(n.at<double>(2)<0)
+              n=-n;
+      }
+      if (method==SVO_with_1988)
+      {
+          if(n.at<double>(2)>0)
+              n=-n;
+      }
+      vn.push_back(n);
+  }
     
     // Choose 1 motion by checking in triangulated points and parallax.
     int bestGood = 0;
-    int secondBestGood = 0;    
+    int secondBestGood = 0;
     int bestSolutionIdx = -1;
+    int secondSolutionIdx=-1;
     double bestParallax = -1;
     std::vector<cv::Point3d> bestP3D;
     std::vector<bool> bestTriangulated;
@@ -260,12 +260,14 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
       std::vector<cv::Point3d> mvP3D;
       std::vector<bool> mvTriangulated;
       double mvparallax;
-      int nGood=CheckRT(vR[i], vt[i], InlierH, mvP3D, 4, mvTriangulated, mvparallax);
+      int nGood=CheckRT(vR[i], vt[i],vn[i],d[i],InlierH, mvP3D, 4, mvTriangulated, mvparallax);
+      //  std::cout<<"R="<<vR[i]<<std::endl;
       std::cout<<"nGood: "<<nGood<<" points."<<std::endl;
-       if(nGood>bestGood)
+       if(nGood>=bestGood)
         {
             secondBestGood = bestGood;
             bestGood = nGood;
+            secondSolutionIdx=bestSolutionIdx;
             bestSolutionIdx = i;
             bestParallax = mvparallax;
             bestP3D = mvP3D;
@@ -274,20 +276,92 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
         else if(nGood>secondBestGood)
         {
             secondBestGood = nGood;
+            secondSolutionIdx=i;
         }   
     }
     std::cout<<"best Rt : "<<bestGood<<" points."<<std::endl;
     std::cout<<"Second Rt "<<secondBestGood<<" points."<<std::endl;
-    if(secondBestGood<0.75*bestGood && bestParallax>=minParallax && bestGood>minTriangulated && bestGood>0.9*cv::countNonZero(InlierH))
+    if(method==ORB_SLAM)
     {
-        vR[bestSolutionIdx].copyTo(R21);
-        vt[bestSolutionIdx].copyTo(t21);
-        vP3D = bestP3D;
-        vbTriangulated = bestTriangulated;
-	std::cout<<"Initialize with "<<bestGood<<" points."<<std::endl;
-        return true;
+        if(secondBestGood<0.75*bestGood && bestParallax>=minParallax && bestGood>minTriangulated && bestGood>0.9*cv::countNonZero(InlierH))
+        {
+            vR[bestSolutionIdx].copyTo(R21);
+            vt[bestSolutionIdx].copyTo(t21);
+            vP3D = bestP3D;
+            vbTriangulated = bestTriangulated;
+            std::cout << "Initialize with " << bestGood << " points." << std::endl;
+            return true;
+        } else return false;
+    } else if(method==SVO||SVO_with_1988)
+    {
+        if(secondBestGood<0.9*bestGood)
+        {
+            vR[bestSolutionIdx].copyTo(R21);
+            vt[bestSolutionIdx].copyTo(t21);
+            vP3D = bestP3D;
+            vbTriangulated = bestTriangulated;
+            std::cout << "Initialize with " << bestGood << " points." << std::endl;
+        }else
+        {
+            std::vector<Eigen::Matrix3d> Essential(2);
+            std::vector<double> sum_error(2, 0);
+            Eigen::Matrix3d sqew_t1;
+            sqew_t1 <<
+                    0, -vt[bestSolutionIdx].at<double>(2), vt[bestSolutionIdx].at<double>(1),
+                    vt[bestSolutionIdx].at<double>(2), 0, -vt[bestSolutionIdx].at<double>(0),
+                    -vt[bestSolutionIdx].at<double>(1), vt[bestSolutionIdx].at<double>(0), 0;
+            Eigen::MatrixXd tmp;
+            cv::cv2eigen(vR[bestSolutionIdx], tmp);
+            Essential[0] = sqew_t1 * tmp;
+            //std::cout << Essential[0] << std::endl;
+            Eigen::Matrix3d sqew_t2;
+            sqew_t2 <<
+                    0, -vt[secondSolutionIdx].at<double>(2), vt[secondSolutionIdx].at<double>(1),
+                    vt[secondSolutionIdx].at<double>(2), 0, -vt[secondSolutionIdx].at<double>(0),
+                    -vt[secondSolutionIdx].at<double>(1), vt[secondSolutionIdx].at<double>(0), 0;
+            cv::cv2eigen(vR[secondSolutionIdx], tmp);
+            Essential[1] = sqew_t1 * tmp;
+            //std::cout << Essential[1] << std::endl;
+            for (int j = 0; j < 2; ++j)
+            {
+                for (int i = 0; i < mvKeys1.size(); ++i)
+                {
+                    Eigen::Vector3d v3Dash, v3;
+                    v3Dash << mvKeys1[i].pt.x, mvKeys1[i].pt.y, 1;
+                    v3 << mvKeys2[i].pt.x, mvKeys2[i].pt.y, 1;
+                    double dm = v3Dash.transpose() * Essential[j] * v3;
+                    Eigen::Vector3d fv3 = Essential[j] * v3;
+                    Eigen::Vector3d fTv3Dash = Essential[j].transpose() * v3Dash;
+                    Eigen::Vector2d fv3Slice = fv3.head<2>();
+                    Eigen::Vector2d fTv3DashSlice = fTv3Dash.head<2>();
+                    dm = (dm * dm / (fv3Slice.dot(fv3Slice) + fTv3DashSlice.dot(fTv3DashSlice)));
+                    if (dm > 16)
+                    {
+                        dm = 16;
+                        sum_error[j] += dm;
+                    }
+                }
+                sum_error[j] = sum_error[j] / mvKeys1.size();
+            }
+            if (sum_error[0] > sum_error[1])
+            {
+                std::cout << "sum_error[1] = " << sum_error[1] << " sum_error[0]" << sum_error[0] << std::endl;
+                vR[secondSolutionIdx].copyTo(R21);
+                vt[secondSolutionIdx].copyTo(t21);
+                vP3D = bestP3D;
+                vbTriangulated = bestTriangulated;
+                return true;
+            } else
+            {
+                std::cout << "sum_error[0] = " << sum_error[0] << " sum_error[1]" << sum_error[1] << std::endl;
+                vR[bestSolutionIdx].copyTo(R21);
+                vt[bestSolutionIdx].copyTo(t21);
+                vP3D = bestP3D;
+                vbTriangulated = bestTriangulated;
+                return true;
+            }
+        }
     }
-    return false; 
 }
 
 bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t21, std::vector<cv::Point3d> &vP3D, std::vector<bool> &vbTriangulated,double minParallax, int minTriangulated)
@@ -309,10 +383,11 @@ bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t
     std::vector<bool> vbTriangulated1,vbTriangulated2,vbTriangulated3, vbTriangulated4;
     double parallax1,parallax2, parallax3, parallax4;
 
-    int nGood1 = CheckRT(R1,t1,InlierE,vP3D1, 4, vbTriangulated1, parallax1);
-    int nGood2 = CheckRT(R2,t1,InlierE, vP3D2, 4, vbTriangulated2, parallax2);
-    int nGood3 = CheckRT(R1,t2,InlierE, vP3D3, 4,vbTriangulated3, parallax3);
-    int nGood4 = CheckRT(R2,t2,InlierE, vP3D4, 4, vbTriangulated4, parallax4);
+    cv::Mat emptyMat;
+    int nGood1 = CheckRT(R1,t1, emptyMat, 0,InlierE,vP3D1, 4, vbTriangulated1, parallax1);
+    int nGood2 = CheckRT(R2,t1,emptyMat, 0,InlierE, vP3D2, 4, vbTriangulated2, parallax2);
+    int nGood3 = CheckRT(R1,t2,emptyMat, 0,InlierE, vP3D3, 4,vbTriangulated3, parallax3);
+    int nGood4 = CheckRT(R2,t2,emptyMat, 0,InlierE, vP3D4, 4, vbTriangulated4, parallax4);
     
     std::cout<<"Number of inlier RT from E="<<nGood1<<", "<<nGood2<<", "<<nGood3<<", "<<nGood4<<std::endl;
     
@@ -393,7 +468,7 @@ bool Initialization::RecoverPoseE(cv::Mat EssentialMat, cv::Mat& R21, cv::Mat& t
 
 // Check R&t by computing triangulated points and its parallax. Return the number of visible 3Dpoints.
 // Maximum allowed reprojection error to treat a point pair as an inlier: 2 pixel.
-int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesInliers, std::vector<cv::Point3d> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax)
+int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, const cv::Mat n, const double d, cv::Mat vbMatchesInliers, std::vector<cv::Point3d> &vP3D, double th2, std::vector<bool> &vbGood, double &parallax)
 {
     // Calibration parameters
     const double fx = mK.at<double>(0,0);
@@ -447,14 +522,29 @@ int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesI
         double cosParallax = normal1.dot(normal2)/(dist1*dist2);
 
         // Check depth in front of first camera (only if enough parallax, as "infinite" points can easily go to negative depth)
-        if(p3dC1.at<double>(2)<=0 && cosParallax<0.99998)
-            continue;
+        if (method==ORB_SLAM)
+        {
+            if(p3dC1.at<double>(2)<=0 && cosParallax<0.99998)
+                continue;
+        } else if (method==SVO||SVO_with_1988)
+        {
+            if(p3dC1.at<double>(2)<=0)
+                continue;
+        }
 
         // Check depth in front of second camera (only if enough parallax, as "infinite" points can easily go to negative depth)
         cv::Mat p3dC2 = R*p3dC1+t;
 
-        if(p3dC2.at<double>(2)<=0 && cosParallax<0.99998)
-            continue;
+        if (method==ORB_SLAM)
+        {
+            if(p3dC2.at<double>(2)<=0 && cosParallax<0.99998)
+                continue;
+        } else if (method==SVO||SVO_with_1988)
+        {
+            if(p3dC1.at<double>(2)<=0)
+                continue;
+        }
+
 
         // Check reprojection error in first image
         double im1x, im1y;
@@ -477,6 +567,17 @@ int Initialization::CheckRT(const cv::Mat R, const cv::Mat t, cv::Mat vbMatchesI
 
         if(squareError2>th2)
             continue;
+
+        //Check the corresponding solutions for the normal n. nX=d.
+        if (method==SVO_with_1988)
+        {
+            if(!n.empty() &&d!= 0)
+            {
+                double temp=n.dot(normal1);
+                if(temp/d<0)
+                    continue;
+            }
+        }
 
         vCosParallax.push_back(cosParallax);
         vP3D[i] = cv::Point3d(p3dC1.at<double>(0),p3dC1.at<double>(1),p3dC1.at<double>(2));
