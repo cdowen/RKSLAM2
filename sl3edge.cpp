@@ -27,8 +27,10 @@ double getPixelValuef(double x, double y, cv::Mat *image)
 Eigen::Vector2d EdgeSL3::homo_project()
 	{
 		const VertexSL3* v1 = static_cast<const VertexSL3*>(_vertices[0]);
+		Eigen::Vector3d result=v1->estimate()*loc.homogeneous();
+		result=result/result(2);
 	
-		return (v1->estimate()*loc.homogeneous()).hnormalized();
+		return result.head(2);
 	}
 	void EdgeSL3::computeError()
 	{

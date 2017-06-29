@@ -37,12 +37,12 @@ void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eige
 	Eigen::Vector3d input, res;
 	if (h.isZero(0))
 	{
-		//h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 		// real answer
-		h<<
-								  1.006182e+000, 2.459331e-003, 1.633217e-003,
-		6.525023e-004, 1.013484e+000, -3.232950e-003,
-					  -6.010459e-004, -2.420502e-002, 9.999996e-001;
+		//h<<
+		//						  1.006182e+000, 2.459331e-003, 1.633217e-003,
+		//6.525023e-004, 1.013484e+000, -3.232950e-003,
+		//			  -6.010459e-004, -2.420502e-002, 9.999996e-001;
 		// for Shen Chenlong
 		//a = (cv::Mat_<double>(3,3)<<
 		//						  1.160721381656755, -0.008292699626746215, -40.02850611710956,
@@ -207,7 +207,8 @@ cv::Mat generateImage(cv::Mat image)
 	homo = Eigen::Scaling(1.05, 1.0)*homo;
 	std::cout<<"constructed homography:"<<homo.matrix()<<"\n";
 
-	Eigen::Vector2d loc, projected;
+	Eigen::Vector2d loc;
+	Eigen::Vector3d projected;
 	cv::Mat res(image.size(), image.type(), cv::Scalar(0));
 	homo = homo.inverse();
 	for (int i = 0;i<image.rows;i++)
@@ -215,7 +216,8 @@ cv::Mat generateImage(cv::Mat image)
 		for (int j = 0;j<image.cols;j++)
 		{
 			loc<<j,i;
-			projected = (homo*loc.homogeneous()).hnormalized();
+			projected = homo*loc.homogeneous();
+			projected = projected/projected(2);
 			if (projected[1]>=0&&projected[1]<image.rows&&projected[0]>=0&&projected[0]<image.cols)
 				res.at<uint8_t>(i,j) = image.at<uint8_t>(projected[1], projected[0]);
 		}

@@ -98,7 +98,8 @@ MapPoint* LocalMap::GetPositionByOptimization(cv::KeyPoint kp1, cv::KeyPoint kp2
 		if (it!= nullptr)
 		{
 			Eigen::Map<Eigen::Vector3d> loc((double*)it->Tw.data);
-			meandepth+=(kfTcw*loc.homogeneous()).hnormalized()[2];
+			Eigen::Vector4d wpoint = kfTcw*loc.homogeneous();
+			meandepth += wpoint(2)/wpoint(3);
 			count++;
 		}
 	}

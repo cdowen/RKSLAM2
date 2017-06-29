@@ -162,8 +162,9 @@ void Tracking::Run(std::string pathtoData)
 						continue;
 					}
 					//for test: draw matches when initializing with LK.
-					//void drawMatchInitial(Frame* lastFrame, Frame* currFrame, std::vector<cv::Point2f>matches);
-					//drawMatchInitial(FirstFrame,fr,matched_point_LK);
+					void drawMatchInitial(Frame* lastFrame, Frame* currFrame, std::vector<cv::Point2f>matches);
+					drawMatchInitial(FirstFrame,fr,matched_point_LK);
+
 					SecondFrame = fr;
 					cv::KeyPoint::convert(matched_point_LK,SecondFrame->keypoints);
 
@@ -184,9 +185,11 @@ void Tracking::Run(std::string pathtoData)
 					{
 						std::cout << "System Initialized !\n\n";
 						//for test: compare the precision of the H between using sbi and using opencv::computeH.
-						void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
+						void testProjection(Frame *lastFrame, Frame *currFrame, Eigen::Matrix3d h = Eigen::Matrix3d::Zero());
 						testProjection(FirstFrame, SecondFrame);
-						testProjection(FirstFrame,SecondFrame,Initializer->DeltaH);
+						Eigen::Matrix3d deltaH;
+						cv::cv2eigen(Initializer->DeltaH,deltaH);
+						testProjection(FirstFrame,SecondFrame,deltaH);
 
 						// store mTcw of keyframes
 						//TODO
@@ -323,9 +326,11 @@ void Tracking::Run(std::string pathtoData)
 							std::cout << "System Initialized !\n\n";
 							FirstFrame=VINS_FramesInWindow[frs];
 							//for test: compare the precision of the H between using sbi and using opencv::computeH.
-							void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
+							void testProjection(Frame *lastFrame, Frame *currFrame, Eigen::Matrix3d h = Eigen::Matrix3d::Zero());
 							testProjection(FirstFrame, SecondFrame);
-							testProjection(FirstFrame, SecondFrame, Initializer->DeltaH);
+							Eigen::Matrix3d deltaH;
+							cv::cv2eigen(Initializer->DeltaH,deltaH);
+							testProjection(FirstFrame,SecondFrame,deltaH);
 
 							// store mTcw of keyframes
 							//TODO

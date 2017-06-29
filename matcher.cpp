@@ -94,17 +94,18 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 {
 	std::map<int,int> MatchedPoints={};
 	// kpl:points in fr1.
-	Eigen::Vector2d kpl;
+	Eigen::Vector3d kpl;
 	// ppl:points projected to fr2.
-	Eigen::Vector2d ppl;
+	Eigen::Vector3d ppl;
 	const Eigen::Matrix3d hinv = h.inverse();
 	int width = fr1->image.size().width;
 	int height = fr1->image.size().height;
 	for (int i = 0; i < fr1->keypoints.size(); i++)
 	{
 		cv::KeyPoint kp = fr1->keypoints[i];
-		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y;
-		ppl = (h*kpl.homogeneous()).hnormalized();
+		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y;kpl(2) = 1;
+		ppl = h*kpl;
+		ppl = ppl/ppl(2);
 		cv::Mat_<uint8_t> warped(patchHalfSize * 2, patchHalfSize * 2, uint8_t(0));
 		int warpedSize = 0;
 		//calculate warped patch.
@@ -114,7 +115,8 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 			{
 				// equation 7 in rkslam.
 				Eigen::Vector3d tmp;
-				tmp = h*kpl.homogeneous();
+				tmp<<kpl(0),kpl(1),1;
+				tmp = h*tmp;
 				tmp = tmp/tmp(2);
 				tmp(0)+=ii;tmp(1)+=jj;
 				tmp = (hinv*tmp)/tmp(2);
@@ -137,7 +139,7 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 		for (int j = 0; j < fr2->keypoints.size(); j++)
 		{
 			cv::Point2f pt2 = fr2->keypoints[j].pt;
-			Eigen::Vector2d tmp(pt2.x, pt2.y);
+			Eigen::Vector3d tmp(pt2.x, pt2.y, 1);
 			if ((ppl-tmp).squaredNorm()>reprojError)
 			{
 				continue;
