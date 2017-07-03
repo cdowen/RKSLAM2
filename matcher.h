@@ -18,12 +18,12 @@ public:
 private:
   	int SSDcompute(Frame* fr1, Frame*fr2, cv::KeyPoint kp1, cv::KeyPoint kp2);
   	int SSD_error_th=10000;
-	int SSD_error_avg = 2000;
+	int SSD_error_avg = 900;
   	const double globalSearchHalfLength = 5;
 	const double InitSearchHalfLength=15;
   	const int patchHalfSize = 4;
 	const double reprojError = 8;
-
+	const double minSiftError=340000;
 
 };
 

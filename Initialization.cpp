@@ -11,7 +11,7 @@ enum Method{
     SVO_with_1988=2,
     VINS_Mono=3
 };
-Method method=SVO_with_1988;
+Method method=ORB_SLAM;
 
 
 //return the type of opencv paraments.
@@ -197,7 +197,7 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
         }
         if (method==SVO_with_1988)
         {
-            if(n.at<double>(2)>0)
+            if(n.at<double>(2)<0)
                 n=-n;
         }
         vn.push_back(n);
@@ -241,7 +241,7 @@ bool Initialization::RecoverPoseH(cv::Mat Homography, cv::Mat& R21, cv::Mat& t21
       }
       if (method==SVO_with_1988)
       {
-          if(n.at<double>(2)>0)
+          if(n.at<double>(2)<0)
               n=-n;
       }
       vn.push_back(n);
@@ -660,3 +660,4 @@ void Initialization::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::
 	if(cv::determinant(R2)<0)
 		R2=-R2;
 }
+

@@ -12,12 +12,14 @@
 #include <iomanip>
 #include <vikit/vision.h>
 #include <g2o/types/slam3d/se3quat.h>
+#include <opencv2/xfeatures2d.hpp>
 
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
 enum InitializeMethod
 {
 	SVO=1,
-	VINS_Mono=2
+	VINS_Mono=2,
+	DEPTH=3,
 };
 
 
@@ -27,8 +29,9 @@ void Tracking::Run(std::string pathtoData)
 	void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int, int> matches);
 	void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eigen::Matrix3d::Zero());
 	void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches);
+	void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches);
 	cv::Mat generateImage(cv::Mat image);
-	//testProjection(NULL, NULL);
+
 	//Load Images.
 	localMap = new LocalMap(this);
 	std::vector<std::string> vstrImageFilenames;
@@ -36,11 +39,12 @@ void Tracking::Run(std::string pathtoData)
 	std::string strFile=pathtoData+"/rgb.txt";
 	LoadImages(strFile,vstrImageFilenames,vTimestamps);
 
+
 	int nImages=vstrImageFilenames.size();
 	Optimizer::mK = this->mK;
 	for(int ni=0;ni<nImages;ni++)
 	{
-		InitializeMethod Method = SVO;
+		InitializeMethod Method = DEPTH;
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
 		double tframe=vTimestamps[ni];
 		Frame* fr = new Frame();
@@ -48,17 +52,6 @@ void Tracking::Run(std::string pathtoData)
 		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
 		fr->image = im;
 		fr->id = ni;
-		if(Method==SVO||VINS_Mono)
-		{
-			//Build Image Pyramid.
-			fr->ImgPyrForInitial.resize(PyramidLevel);
-			fr->ImgPyrForInitial[0]=fr->image;
-			for (int i = 1; i < PyramidLevel; ++i)
-			{
-				fr->ImgPyrForInitial[i]=cv::Mat(fr->ImgPyrForInitial[i-1].rows/2,fr->ImgPyrForInitial[i-1].cols/2,CV_8U);
-				vk::halfSample(fr->ImgPyrForInitial[i-1],fr->ImgPyrForInitial[i]);
-			}
-		}
 		fr->timestamp = tframe;
 		lastFrame = currFrame;
 		currFrame = fr;
@@ -66,6 +59,83 @@ void Tracking::Run(std::string pathtoData)
 		//Initialize.
 		if(mState==NOT_INITIALIZED)
 		{
+			if (Method == DEPTH)
+			{
+				if (abs(fr->timestamp-1305031107.37541)<0.01)
+				{
+					cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create(500);
+					sift->detect(currFrame->image, currFrame->keypoints);
+					fr->mTcw = (cv::Mat_<double>(4,4) <<
+							0.0366,   0.6212,  -0.7828, 1.3088,
+							0.9983,   0.0132,   0.0571, 0.6183,
+							0.0458,  -0.7836,  -0.6196, 1.6648,
+							0, 0, 0, 1);
+					fr->mTcw = fr->mTcw.inv();
+					FirstFrame = fr;
+				}
+				if (abs(fr->timestamp-1305031107.91154)<0.01)
+				{
+					SecondFrame = fr;
+					cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create(500);
+					sift->detect(currFrame->image, currFrame->keypoints);
+					fr->mTcw = (cv::Mat_<double>(4,4)<<
+													 0.0710,   0.6291,  -0.7741, 1.3144,
+							0.9953,   0.0063,   0.0964, 0.6474,
+							0.0655,   -0.7773,   -0.6257, 1.6570,
+							0, 0, 0, 1);
+					fr->mTcw = fr->mTcw.inv();
+					cv::Mat desc1, desc2;
+					sift->compute(FirstFrame->image, FirstFrame->keypoints, desc1);
+					sift->compute(SecondFrame->image, SecondFrame->keypoints, desc2);
+					cv::Ptr<cv::FlannBasedMatcher> matcher = cv::FlannBasedMatcher::create();
+					std::vector<cv::DMatch> matches;
+					matcher->match(desc1, desc2, matches);
+					std::map<int, int> tmpm;
+					for (int i = 0;i<matches.size();i++)
+					{
+						tmpm.insert(std::make_pair(matches[i].trainIdx, matches[i].queryIdx));
+					}
+					SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), tmpm));
+
+					cv::Mat depth1 = cv::imread(pathtoData+"/depth/1305031107.367183.png", cv::IMREAD_GRAYSCALE);
+					cv::Mat Twc = fr->mTcw.inv();
+					FirstFrame->mappoints.resize(FirstFrame->keypoints.size());
+					std::fill(FirstFrame->mappoints.begin(), FirstFrame->mappoints.end(), nullptr);
+					SecondFrame->mappoints.resize(SecondFrame->keypoints.size());
+					std::fill(SecondFrame->mappoints.begin(), SecondFrame->mappoints.end(), nullptr);
+					for (int i = 0;i<matches.size();i++)
+					{
+						MapPoint* mp = new MapPoint;
+						cv::Mat_<double> loc(3,1), tmp(3,1);
+						cv::Point2f pt = FirstFrame->keypoints[matches[i].queryIdx].pt;
+						tmp(0) = pt.x;tmp(1) = pt.y;tmp(2) = 1;
+						loc = mK.inv()*tmp*depth1.at<uint8_t>(pt.y, pt.x);
+						mp->Tw = Twc.colRange(0,3).rowRange(0,3)*loc + Twc.col(3).rowRange(0,3);
+						mp->allObservation.insert(std::make_pair(FirstFrame, &FirstFrame->keypoints[matches[i].queryIdx]));
+						mp->allObservation.insert(std::make_pair(SecondFrame, &SecondFrame->keypoints[matches[i].trainIdx]));
+
+						FirstFrame->mappoints[matches[i].queryIdx] = mp;
+						SecondFrame->mappoints[matches[i].trainIdx] = mp;
+					}
+					Map* map = Map::getInstance();
+					map->addKeyFrame(static_cast<KeyFrame*>(FirstFrame));
+					map->addKeyFrame(static_cast<KeyFrame*>(SecondFrame));
+					mState = OK;
+				}
+				continue;
+			}
+			if(Method==SVO||VINS_Mono)
+			{
+				//Build Image Pyramid.
+				fr->ImgPyrForInitial.resize(PyramidLevel);
+				fr->ImgPyrForInitial[0]=fr->image;
+				for (int i = 1; i < PyramidLevel; ++i)
+				{
+					fr->ImgPyrForInitial[i]=cv::Mat(fr->ImgPyrForInitial[i-1].rows/2,fr->ImgPyrForInitial[i-1].cols/2,CV_8U);
+					vk::halfSample(fr->ImgPyrForInitial[i-1],fr->ImgPyrForInitial[i]);
+				}
+			}
+
 			int grid_n_cols_=std::ceil(static_cast<double>(fr->image.cols)/cell_size);
 			int grid_n_rows_=std::ceil(static_cast<double>(fr->image.rows)/cell_size);
 			std::vector<float > score_at_grid(grid_n_cols_*grid_n_rows_,0);
@@ -156,11 +226,11 @@ void Tracking::Run(std::string pathtoData)
 						std::cout<<"Failed to Initialize: few matched points.";
 						continue;
 					}
-					std::sort(disparities.begin(),disparities.end());
+					/*std::sort(disparities.begin(),disparities.end());
 					if (disparities[(disparities.size()-1)/2]<50.0)
 					{
 						continue;
-					}
+					}*/
 					//for test: draw matches when initializing with LK.
 					//void drawMatchInitial(Frame* lastFrame, Frame* currFrame, std::vector<cv::Point2f>matches);
 					//drawMatchInitial(FirstFrame,fr,matched_point_LK);
@@ -184,9 +254,9 @@ void Tracking::Run(std::string pathtoData)
 					{
 						std::cout << "System Initialized !\n\n";
 						//for test: compare the precision of the H between using sbi and using opencv::computeH.
-						void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
-						testProjection(FirstFrame, SecondFrame);
-						testProjection(FirstFrame,SecondFrame,Initializer->DeltaH);
+						//void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
+						//testProjection(FirstFrame, SecondFrame);
+						//testProjection(FirstFrame,SecondFrame,Initializer->DeltaH);
 
 						// store mTcw of keyframes
 						//TODO
@@ -323,9 +393,9 @@ void Tracking::Run(std::string pathtoData)
 							std::cout << "System Initialized !\n\n";
 							FirstFrame=VINS_FramesInWindow[frs];
 							//for test: compare the precision of the H between using sbi and using opencv::computeH.
-							void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
-							testProjection(FirstFrame, SecondFrame);
-							testProjection(FirstFrame, SecondFrame, Initializer->DeltaH);
+							//void testProjection(Frame *lastFrame, Frame *currFrame, cv::Mat a = cv::Mat());
+							//testProjection(FirstFrame, SecondFrame);
+							//testProjection(FirstFrame, SecondFrame, Initializer->DeltaH);
 
 							// store mTcw of keyframes
 							//TODO
@@ -392,7 +462,9 @@ void Tracking::Run(std::string pathtoData)
 			if(mState==OK)
 			{
 				std::cout<<"Tracking..."<<std::endl;
-				cv::FAST(currFrame->image, currFrame->keypoints, 20);
+				//cv::FAST(currFrame->image, currFrame->keypoints, 20);
+				cv::Ptr<cv::xfeatures2d::SiftFeatureDetector> sift = cv::xfeatures2d::SiftFeatureDetector::create(500);
+				sift->detect(currFrame->image, currFrame->keypoints);
 				Map* map = Map::getInstance();
 				auto a = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 				std::map<int,int>matches;
@@ -401,9 +473,10 @@ void Tracking::Run(std::string pathtoData)
 				for (int i = 0;i<kfs.size();i++)
 				{
 					Eigen::Matrix3d b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
-					Eigen::Matrix3d c = b*a;
+					Eigen::Matrix3d c = a*b;
 					c = c/c(2,2);
 					khs.insert(std::make_pair(kfs[i], c));
+  					//testProjection(kfs[i], currFrame, c);
 				}
 				if (std::find(map->allKeyFrame.begin(), map->allKeyFrame.end(), lastFrame)!=map->allKeyFrame.end())
 				{
@@ -415,7 +488,16 @@ void Tracking::Run(std::string pathtoData)
 				std::cout<<"Matched points with keyframe:"<<matchKfNum<<"\n";
 				if (matchKfNum<100)
 				{
-					std::cout << "Matched points with local homo:" << match.SearchMatchByLocal(currFrame, kfs) << "\n";
+					//std::cout << "Matched points with local homo:" << match.SearchMatchByLocal(currFrame, kfs) << "\n";
+				}
+				for (auto iter = currFrame->matchedGroup.begin();iter!=currFrame->matchedGroup.end();iter++)
+				{
+					if (std::abs(currFrame->timestamp-1305031108.111378)<0.01)
+					{
+						drawMatch(iter->first, currFrame, iter->second);
+						testProjection(iter->first, currFrame, currFrame->keyFrameSet[iter->first]);
+						cv::waitKey(0);
+					}
 				}
 
 				currFrame->mappoints.resize(currFrame->keypoints.size());
@@ -463,6 +545,7 @@ void Tracking::Run(std::string pathtoData)
 						kf->mappoints[it2->second]->allObservation.insert(std::make_pair(currFrame, &currFrame->keypoints[it2->first]));
 					}
 				}
+				//localMap->LocalOptimize(currFrame);
 				if (DecideKeyFrame(currFrame, matchKfNum))
 				{
 					std::cout<<"new keyframe selected"<<"\n";

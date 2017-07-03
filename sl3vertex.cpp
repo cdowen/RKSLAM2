@@ -28,6 +28,7 @@ void VertexSL3::oplusImpl(const double *update)
 	{
 		upv(i/3, i%3) = update[i];
 	}
+	upv(2,2) = 0;
 	_estimate = _estimate+upv;
 	mu = update[8]+mu;
 }

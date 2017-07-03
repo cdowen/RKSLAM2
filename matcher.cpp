@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <Eigen/Dense>
 #include <opencv2/core/eigen.hpp>
+#include <opencv2/xfeatures2d.hpp>
 #include "KeyFrame.h"
 std::map<int,int> Matcher::SearchForInitialization(Frame* fr1, Frame* fr2)
 {
@@ -83,6 +84,7 @@ int Matcher::SearchMatchByGlobal(Frame *fr1, std::map<KeyFrame *, Eigen::Matrix3
 		auto tmpd = matchByH(i->first,fr1, i->second);
 		fr1->matchedGroup.insert(std::make_pair(i->first, tmpd));
 		count+=tmpd.size();
+		std::cout<<"matched with kp size: "+std::to_string(i->first->timestamp)+"->"+std::to_string(fr1->timestamp)+":"<<tmpd.size()<<"\n";
 	}
 	return count;
 }
@@ -92,6 +94,13 @@ int Matcher::SearchMatchByGlobal(Frame *fr1, std::map<KeyFrame *, Eigen::Matrix3
 // TODO: different search range for well and ill conditioned points
 std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 {
+#ifdef USE_SIFT
+	//match with SIFT
+	cv::Ptr<cv::xfeatures2d::SiftDescriptorExtractor> sift = cv::xfeatures2d::SiftDescriptorExtractor::create();
+	cv::Mat desc1, desc2;
+	sift->compute(fr1->image, fr1->keypoints, desc1);
+	sift->compute(fr2->image, fr2->keypoints, desc2);
+#endif
 	std::map<int,int> MatchedPoints={};
 	// kpl:points in fr1.
 	Eigen::Vector2d kpl;
@@ -105,6 +114,7 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 		cv::KeyPoint kp = fr1->keypoints[i];
 		kpl(0) = kp.pt.x; kpl(1) = kp.pt.y;
 		ppl = (h*kpl.homogeneous()).hnormalized();
+#ifndef USE_SIFT
 		cv::Mat_<uint8_t> warped(patchHalfSize * 2, patchHalfSize * 2, uint8_t(0));
 		int warpedSize = 0;
 		//calculate warped patch.
@@ -130,7 +140,9 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 		{
 			continue;
 		}
+#endif
 		int min_SSD_error = SSD_error_avg;
+		int min_SIFT_error = minSiftError;
 		// iterate to find the smallest error in fr2.
 		int Matched_id=-1;
 		cv::Mat differ;
@@ -143,6 +155,17 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 			//}
 			if (abs(ppl(0) - pt2.x)<globalSearchHalfLength&&abs(ppl(1)-pt2.y)<globalSearchHalfLength)
 			{
+#ifdef USE_SIFT
+				cv::Mat result;
+				cv::absdiff(desc1.row(i), desc2.row(j), result);
+				double thres = result.dot(result);
+				//std::cout<<result<<"\n";
+				if (thres<min_SIFT_error)
+				{
+					min_SIFT_error = thres;
+					Matched_id = j;
+				}
+#else
 				int u = pt2.y-patchHalfSize;int d = pt2.y+patchHalfSize;int l = pt2.x-patchHalfSize;int r = pt2.x+patchHalfSize;
 				if (u<0||d>=height||l<0||r>=width)
 				{
@@ -158,6 +181,7 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 					min_SSD_error = ssdError;
 					Matched_id = j;
 				}
+#endif
 			}
 		}
 		if (Matched_id>-1)
@@ -220,6 +244,7 @@ int Matcher::MatchByLocalH(Frame* currFrame, KeyFrame* kfs)
 	}
 	return matchNum;
 }
+
 
 int Matcher::SearchMatchByLocal(Frame* currFrame, std::vector<KeyFrame*> kfs)
 {

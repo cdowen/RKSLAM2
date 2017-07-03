@@ -46,8 +46,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalSBI(Frame *fr1, Frame *fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.001);
-	action->setMaxIterations(50);
+	action->setGainThreshold(0.0001);
+	action->setMaxIterations(500);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -112,13 +112,13 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 
 	BlockSolver_9_1 * solver_ptr = new BlockSolver_9_1(linearSolver);
 
-	g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 	optimizer.setAlgorithm(solver);
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
 	action->setGainThreshold(0.0001);
-	action->setMaxIterations(10);
+	action->setMaxIterations(20);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -173,7 +173,7 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 		optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
-	optimizer.setVerbose(true);
+	//optimizer.setVerbose(true);
 	optimizer.optimize(50);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
 	fr2->keyFrameSet[kf] = sl3d->estimate();

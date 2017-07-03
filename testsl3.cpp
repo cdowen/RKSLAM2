@@ -10,6 +10,16 @@
 #include <opencv/cxeigen.hpp>
 #include <Eigen/Geometry>
 cv::Mat generateImage(cv::Mat image);
+
+void findCorrespondenceByKp(Frame* lastFrame, Frame* currFrame, std::map<int,int>& matches)
+;
+
+void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
+;
+
+void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
+;
+
 // fr1 as the reference frame; project points in fr2 to fr1;
 void testMatchByH(Frame *fr1, Frame *fr2, Eigen::Matrix3d H)
 {
@@ -37,12 +47,12 @@ void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eige
 	Eigen::Vector3d input, res;
 	if (h.isZero(0))
 	{
-		//h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
+		h = Optimizer::ComputeHGlobalSBI(lastFrame, currFrame);
 		// real answer
-		h<<
-								  1.006182e+000, 2.459331e-003, 1.633217e-003,
-		6.525023e-004, 1.013484e+000, -3.232950e-003,
-					  -6.010459e-004, -2.420502e-002, 9.999996e-001;
+		//h<<
+		//						  1.006182e+000, 2.459331e-003, 1.633217e-003,
+		//6.525023e-004, 1.013484e+000, -3.232950e-003,
+		//			  -6.010459e-004, -2.420502e-002, 9.999996e-001;
 		// for Shen Chenlong
 		//a = (cv::Mat_<double>(3,3)<<
 		//						  1.160721381656755, -0.008292699626746215, -40.02850611710956,
@@ -62,36 +72,35 @@ void testProjection(Frame* lastFrame, Frame* currFrame, Eigen::Matrix3d h = Eige
 		{
 			input(0) = j;input(1) = i;input(2) = 1;
 			//std::cout<<"No:"<<i*currImage.cols+j<<std::endl;
-			res = h*input;
+			//res = h*input;
 			//res = res/res(2);
-			//res = h.inverse()*input;
-			//res = res/res(2);
+			res = h.inverse()*input;
+			res = res/res(2);
 			//std::cout<<"before regulation:"<<res<<std::endl;
 			//std::cout<<"after regulation:"<<res<<std::endl;
 			if (res(0)>=0 && res(0) < currImage.size().width && res(1) >= 0 && res(1) < currImage.size().height)
 			{
-				reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
-				//reM.at<uint8_t>(i,j) =lastFrame->image.at<uint8_t>(res(1), res(0));
+				//reM.at<uint8_t>(res(1),res(0)) = lastFrame->image.at<uint8_t>(i,j);
+				reM.at<uint8_t>(i,j) =lastFrame->image.at<uint8_t>(res(1), res(0));
 			}
 		}
 	}
-	cv::imshow("original frame", lastFrame->image);
+	cv::imshow("original frame:"+std::to_string(lastFrame->timestamp), lastFrame->image);
 	cv::imshow("result", reM);
-	cv::imshow("second frame", currImage);
+	cv::imshow("second frame:"+std::to_string(currFrame->timestamp), currImage);
 	cv::Mat resultImg;
 	cv::addWeighted(reM, 0.5, currImage, 0.5, 0.5, resultImg);
-	cv::imshow("blended", resultImg);
+	cv::imshow("blended:"+std::to_string(lastFrame->timestamp)+"+"+std::to_string(currFrame->timestamp), resultImg);
 	cv::Mat differ;
 	cv::absdiff(reM, currImage, differ);
 	differ = differ&(reM!=0);
 	double error = differ.dot(differ);
-	std::cout<<error/(640*480)<<"\n";
-	cv::waitKey(0);
+	std::cout<<"avg reproj error:"+std::to_string(lastFrame->timestamp)+"->"+std::to_string(currFrame->timestamp)+":"<<error/cv::countNonZero(reM)<<"\n";
 }
 
 void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
 {
-	int tmpd;
+	int tmpd = 0;
 	std::vector<cv::DMatch> dm;
 	std::vector<cv::KeyPoint> kp1, kp2;
 	for (auto it = matches.begin(); it != matches.end(); ++it)
@@ -106,8 +115,7 @@ void drawMatch(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
 	}
 	cv::Mat out;
 	cv::drawMatches(lastFrame->image, kp1, currFrame->image, kp2, dm, out);
-	imshow("matches", out);
-	cv::waitKey(0);
+	imshow("matches:"+std::to_string(lastFrame->timestamp)+" "+std::to_string(currFrame->timestamp), out);
 }
 
 void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<int,int> matches)
@@ -119,7 +127,7 @@ void drawProjection(Frame* lastFrame, Frame* currFrame, std::map<int,int> matche
 		kp2.push_back(currFrame->keypoints[it->first].pt);
 	}
 	cv::Mat mask;
-	cv::Mat H = cv::findHomography(kp1, kp2, cv::RANSAC, 2, mask);
+	cv::Mat H = cv::findHomography(kp1, kp2, CV_RANSAC, 2, mask);
 	Eigen::Matrix3d h;
 	cv::cv2eigen(H, h);
 	testProjection(lastFrame, currFrame, h);
