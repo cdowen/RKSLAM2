@@ -179,6 +179,10 @@ std::map<int,int> Matcher::matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& h)
 					continue;
 				}
 				cv::Mat patch = fr2->image.rowRange(u, d).colRange(l, r);
+				if (patch.size()!=warped.size())
+				{
+					continue;
+				}
 				cv::absdiff(warped-cv::mean(warped), patch-cv::mean(patch), differ);
 				differ = differ&(warped!=0);
 				int ssdError = differ.dot(differ);
