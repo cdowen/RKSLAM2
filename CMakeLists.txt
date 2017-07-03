@@ -6,10 +6,10 @@ set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
 find_package(CSparse REQUIRED)
 find_package(OpenCV 3 REQUIRED)
 find_package(G2O REQUIRED)
-find_package(Eigen3 REQUIRED)
+find_package(Eigen3 3.2.10 REQUIRED)
 find_package (Threads)
 find_package(vikit_common REQUIRED)
-
+message(STATUS "EIGEN3VERSION = ${EIGEN3_VERSION}")
 include_directories(${OpenCV_INCLUDE_DIRS} 
 ${G2O_INCLUDE_DIRS}
 ${EIGEN3_INCLUDE_DIR}

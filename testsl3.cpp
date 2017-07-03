@@ -215,7 +215,8 @@ cv::Mat generateImage(cv::Mat image)
 	homo = Eigen::Scaling(1.05, 1.0)*homo;
 	std::cout<<"constructed homography:"<<homo.matrix()<<"\n";
 
-	Eigen::Vector2d loc, projected;
+	Eigen::Vector2d loc;
+	Eigen::Vector3d projected;
 	cv::Mat res(image.size(), image.type(), cv::Scalar(0));
 	homo = homo.inverse();
 	for (int i = 0;i<image.rows;i++)
@@ -223,7 +224,8 @@ cv::Mat generateImage(cv::Mat image)
 		for (int j = 0;j<image.cols;j++)
 		{
 			loc<<j,i;
-			projected = (homo*loc.homogeneous()).hnormalized();
+			projected = homo*loc.homogeneous();
+			projected = projected/projected(2);
 			if (projected[1]>=0&&projected[1]<image.rows&&projected[0]>=0&&projected[0]<image.cols)
 				res.at<uint8_t>(i,j) = image.at<uint8_t>(projected[1], projected[0]);
 		}
