@@ -31,7 +31,6 @@ public:
 private:
 	void LoadImages(const std::string &strFile, std::vector<std::string> &vstrImageFilenames,
 					std::vector<double> &vTimestamps);
-	int minimalKeyFrameInterval=5;
 	//For Initialization
 	Initialization* Initializer;
 	Frame* FirstFrame;

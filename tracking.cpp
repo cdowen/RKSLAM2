@@ -135,9 +135,6 @@ void Tracking::Run(std::string pathtoData)
 				}
 			}
 
-		//Initialize.
-		if(mState==NOT_INITIALIZED)
-		{
 			int grid_n_cols_=std::ceil(static_cast<double>(fr->image.cols)/cell_size);
 			int grid_n_rows_=std::ceil(static_cast<double>(fr->image.rows)/cell_size);
 			std::vector<float > score_at_grid(grid_n_cols_*grid_n_rows_,0);
