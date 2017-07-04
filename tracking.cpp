@@ -96,7 +96,10 @@ void Tracking::Run(std::string pathtoData)
 					}
 					SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), tmpm));
 
-					cv::Mat depth1 = cv::imread(pathtoData+"/depth/1305031107.367183.png", cv::IMREAD_GRAYSCALE);
+					cv::Mat depth1 = cv::imread(pathtoData+"/depth/1305031107.367183.png", cv::IMREAD_ANYDEPTH);
+					// http://vision.in.tum.de/data/datasets/rgbd-dataset/file_formats
+					depth1.convertTo(depth1, CV_64FC1, 1./5000);
+					cv::Mat_<double> depth(depth1);
 					cv::Mat Twc = fr->mTcw.inv();
 					FirstFrame->mappoints.resize(FirstFrame->keypoints.size());
 					std::fill(FirstFrame->mappoints.begin(), FirstFrame->mappoints.end(), nullptr);
@@ -105,10 +108,12 @@ void Tracking::Run(std::string pathtoData)
 					for (int i = 0;i<matches.size();i++)
 					{
 						MapPoint* mp = new MapPoint;
-						cv::Mat_<double> loc(3,1), tmp(3,1);
+						cv::Mat_<double> loc(3,1);
+						cv::Mat_<double> mmK(mK);
 						cv::Point2f pt = FirstFrame->keypoints[matches[i].queryIdx].pt;
-						tmp(0) = pt.x;tmp(1) = pt.y;tmp(2) = 1;
-						loc = mK.inv()*tmp*depth1.at<uint8_t>(pt.y, pt.x);
+						loc(0) = (pt.x-mmK(0,2))*depth(pt.y, pt.x)/mmK(0,0);
+						loc(1) = (pt.y-mmK(1,2))*depth(pt.y, pt.x)/mmK(1,1);
+						loc(2) = depth(pt.y, pt.x);
 						mp->Tw = Twc.colRange(0,3).rowRange(0,3)*loc + Twc.col(3).rowRange(0,3);
 						mp->allObservation.insert(std::make_pair(FirstFrame, &FirstFrame->keypoints[matches[i].queryIdx]));
 						mp->allObservation.insert(std::make_pair(SecondFrame, &SecondFrame->keypoints[matches[i].trainIdx]));
