@@ -4,7 +4,7 @@
 #include "Frame.h"
 #include "KeyFrame.h"
 #include <Eigen/Core>
-
+#define USE_SIFT
 class Matcher{
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -23,7 +23,7 @@ private:
 	const double InitSearchHalfLength=15;
   	const int patchHalfSize = 4;
 	const double reprojError = 8;
-	const double minSiftError=340000;
+	const double minSiftError=200000;
 
 };
 

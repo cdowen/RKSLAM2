@@ -40,7 +40,7 @@ private:
 	int ShiTScore_Threshold=20;
 	//Initialize with VINS-mono.
 	std::vector<Frame*>VINS_FramesInWindow;
-
+	std::ofstream logfile;
 	const int minimalKeyFrameInterval = 5;
 };
 #endif

@@ -117,8 +117,8 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.0001);
-	action->setMaxIterations(20);
+	action->setGainThreshold(0.0000001);
+	action->setMaxIterations(1000);
 	optimizer.addPostIterationAction(action);
 
 	VertexSL3* vSL3 = new VertexSL3();
@@ -150,7 +150,7 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 		e->xgradient = xgradient;
 		e->ygradient = ygradient;
 		e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-		//optimizer.addEdge(e);
+		optimizer.addEdge(e);
 	}
 	auto it = fr2->matchedGroup.find(kf);
 	// Must be in its overlapping set.
@@ -170,11 +170,11 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 		e->loc[0] = kf->keypoints[it2->second].pt.x;
 		e->loc[1] = kf->keypoints[it2->second].pt.y;
 		e->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
-		optimizer.addEdge(e);
+		//optimizer.addEdge(e);
 	}
 	optimizer.initializeOptimization();
 	//optimizer.setVerbose(true);
-	optimizer.optimize(50);
+	optimizer.optimize(1000);
 	VertexSL3* sl3d = static_cast<VertexSL3*>(optimizer.vertex(0));
 	fr2->keyFrameSet[kf] = sl3d->estimate();
 	std::cout << "optimize with keypoint:"<< sl3d->estimate() << "\n";
@@ -193,8 +193,8 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 
 	g2o::SparseOptimizerTerminateAction* action;
 	action = new g2o::SparseOptimizerTerminateAction();
-	action->setGainThreshold(0.001);
-	action->setMaxIterations(8);
+	action->setGainThreshold(0.0001);
+	action->setMaxIterations(16);
 	optimizer.addPostIterationAction(action);
 
 	// vertex
@@ -211,7 +211,7 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 			g2o::VertexSBAPointXYZ *point = new g2o::VertexSBAPointXYZ();
 			point->setId(index++);
 			point->setEstimate(Eigen::Vector3d(mp->Tw(0), mp->Tw(1), mp->Tw(2)));
-			point->setMarginalized(true);
+			point->setFixed(true);
 			optimizer.addVertex(point);
 		}
 	}
@@ -241,7 +241,7 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 		index++;
 	}
 
-	//optimizer.setVerbose ( true );
+	optimizer.setVerbose ( true );
 	optimizer.initializeOptimization();
 	optimizer.optimize(10);
 	std::cout<<"T="<<std::endl<<Eigen::Isometry3d ( pose->estimate() ).matrix() <<std::endl;

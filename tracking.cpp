@@ -14,7 +14,7 @@
 #include <g2o/types/slam3d/se3quat.h>
 #include <opencv2/xfeatures2d.hpp>
 
-Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){};
+Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){logfile.open("logfile.txt");};
 enum InitializeMethod
 {
 	SVO=1,
@@ -60,7 +60,7 @@ void Tracking::Run(std::string pathtoData)
 		{
 			if (Method == DEPTH)
 			{
-				if (abs(fr->timestamp-1305031107.37541)<0.01)
+				if (fabs(fr->timestamp-1305031107.37541)<0.001)
 				{
 					cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create(500);
 					sift->detect(currFrame->image, currFrame->keypoints);
@@ -72,7 +72,7 @@ void Tracking::Run(std::string pathtoData)
 					fr->mTcw = fr->mTcw.inv();
 					FirstFrame = fr;
 				}
-				if (abs(fr->timestamp-1305031107.91154)<0.01)
+				if (fabs(fr->timestamp-1305031107.91154)<0.001)
 				{
 					SecondFrame = fr;
 					cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create(500);
@@ -483,7 +483,6 @@ void Tracking::Run(std::string pathtoData)
 				{
 					Eigen::Matrix3d b = Optimizer::ComputeHGlobalKF(kfs[i], lastFrame);
 					Eigen::Matrix3d c = a*b;
-					c = c/c(2,2);
 					khs.insert(std::make_pair(kfs[i], c));
   					//testProjection(kfs[i], currFrame, c);
 				}
@@ -501,7 +500,7 @@ void Tracking::Run(std::string pathtoData)
 				}
 				for (auto iter = currFrame->matchedGroup.begin();iter!=currFrame->matchedGroup.end();iter++)
 				{
-					if (std::abs(currFrame->timestamp-1305031108.111378)<0.01)
+					//if (std::abs(currFrame->timestamp-1305031108.111378)<0.01)
 					{
 						drawMatch(iter->first, currFrame, iter->second);
 						testProjection(iter->first, currFrame, currFrame->keyFrameSet[iter->first]);
@@ -528,6 +527,7 @@ void Tracking::Run(std::string pathtoData)
 				// Mappoint creation
 				g2o::SE3Quat t;
 				t.fromVector(Tcw);
+				logfile<<std::setprecision(16)<<currFrame->timestamp<<" "<<Tcw[0]<<" "<<Tcw[1]<<" "<<Tcw[2]<<"\n";
 				cv::eigen2cv(t.to_homogeneous_matrix(), currFrame->mTcw);
 				for (auto it = currFrame->matchedGroup.begin();it!=currFrame->matchedGroup.end();it++)
 				{

@@ -75,6 +75,7 @@ Eigen::Vector2d EdgeSL3::homo_project()
 		ww = fabs(ww) > DBL_EPSILON ? 1./ww : 0;
 		double xi = (h(0,0)*loc[0]+h(0,1)*loc[1]+h(0,2))*ww;
 		double yi = (h(1,0)*loc[0]+h(1,1)*loc[1]+h(1,2))*ww;
+		ww = 0.01*ww;
 
 		_jacobianOplusXi[0] = -x1*xgrd*ww;
 		_jacobianOplusXi[1] = -x2*xgrd*ww;
