@@ -114,6 +114,11 @@ void Tracking::Run(std::string pathtoData)
 						loc(0) = (pt.x-mmK(0,2))*depth(pt.y, pt.x)/mmK(0,0);
 						loc(1) = (pt.y-mmK(1,2))*depth(pt.y, pt.x)/mmK(1,1);
 						loc(2) = depth(pt.y, pt.x);
+						if (loc(2)==0.0)
+						{
+							delete mp;
+							continue;
+						}
 						mp->Tw = Twc.colRange(0,3).rowRange(0,3)*loc + Twc.col(3).rowRange(0,3);
 						mp->allObservation.insert(std::make_pair(FirstFrame, &FirstFrame->keypoints[matches[i].queryIdx]));
 						mp->allObservation.insert(std::make_pair(SecondFrame, &SecondFrame->keypoints[matches[i].trainIdx]));
@@ -502,9 +507,9 @@ void Tracking::Run(std::string pathtoData)
 				{
 					//if (std::abs(currFrame->timestamp-1305031108.111378)<0.01)
 					{
-						drawMatch(iter->first, currFrame, iter->second);
-						testProjection(iter->first, currFrame, currFrame->keyFrameSet[iter->first]);
-						cv::waitKey(0);
+						//drawMatch(iter->first, currFrame, iter->second);
+						//testProjection(iter->first, currFrame, currFrame->keyFrameSet[iter->first]);
+						//cv::waitKey(0);
 					}
 				}
 
@@ -523,12 +528,39 @@ void Tracking::Run(std::string pathtoData)
 					}
 				}
 				// Pose estimation
-				auto Tcw = Optimizer::PoseEstimation(currFrame);
+				//auto Tcw = Optimizer::PoseEstimation(currFrame);
+				std::vector<cv::Point3f> p3d;
+				std::vector<cv::Point2f> p2d;
+				for (int i = 0;i<currFrame->mappoints.size();i++)
+				{
+					MapPoint* mp = currFrame->mappoints[i];
+					if (mp!= nullptr)
+					{
+						p3d.push_back(cv::Point3f(mp->Tw(0), mp->Tw(1), mp->Tw(2)));
+						p2d.push_back(currFrame->keypoints[i].pt);
+					}
+				}
+				if (p3d.size()<=8)
+				{
+					logfile.close();
+					exit(0);
+				}
+				cv::Mat rvec, tvec;
+				cv::solvePnP(p3d, p2d, mK, cv::noArray(), rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
+				cv::Mat rot;
+				cv::Rodrigues(rvec, rot);
+				rot.copyTo(currFrame->mTcw.rowRange(0,3).colRange(0,3));
+				tvec.copyTo(currFrame->mTcw.col(3).rowRange(0,3));
+				currFrame->mTcw.row(3).colRange(0,3) = cv::Mat::zeros(1, 3, CV_64FC1);
+				currFrame->mTcw.at<double>(3,3) = 1;
+				currFrame->mTcw = currFrame->mTcw.inv();
+				cv::Mat_<double> Tcw = currFrame->mTcw;
+				logfile<<std::setprecision(16)<<currFrame->timestamp<<" "<<Tcw(0)<<" "<<Tcw(1)<<" "<<Tcw(2)<<"\n";
 				// Mappoint creation
-				g2o::SE3Quat t;
-				t.fromVector(Tcw);
-				logfile<<std::setprecision(16)<<currFrame->timestamp<<" "<<Tcw[0]<<" "<<Tcw[1]<<" "<<Tcw[2]<<"\n";
-				cv::eigen2cv(t.to_homogeneous_matrix(), currFrame->mTcw);
+				//g2o::SE3Quat t;
+				//t.fromVector(Tcw);
+				//logfile<<std::setprecision(16)<<currFrame->timestamp<<" "<<Tcw[0]<<" "<<Tcw[1]<<" "<<Tcw[2]<<"\n";
+				//cv::eigen2cv(t.to_homogeneous_matrix(), currFrame->mTcw);
 				for (auto it = currFrame->matchedGroup.begin();it!=currFrame->matchedGroup.end();it++)
 				{
 					Frame* kf = it->first;
