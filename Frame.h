@@ -12,6 +12,7 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	cv::Mat image;
 	cv::Mat sbiImg;
+	cv::Mat_<double> depthImg;
 	std::vector<cv::Mat> ImgPyrForInitial;
 
 	unsigned long id;

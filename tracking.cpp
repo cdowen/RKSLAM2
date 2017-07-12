@@ -13,6 +13,8 @@
 #include <vikit/vision.h>
 #include <g2o/types/slam3d/se3quat.h>
 #include <opencv2/xfeatures2d.hpp>
+#include <opencv2/surface_matching.hpp>
+#include <opencv2/surface_matching/ppf_helpers.hpp>
 
 Tracking::Tracking():Initializer(static_cast<Initialization*>(NULL)){logfile.open("logfile.txt");};
 enum InitializeMethod
@@ -22,6 +24,10 @@ enum InitializeMethod
 	DEPTH=3,
 };
 
+
+// depth1:scene depth;depth2:model depth, compute projection from model to scene;
+cv::Mat getPosByICP(cv::Mat_<double> depth1, cv::Mat_<double> depth2, cv::Mat_<double> mK)
+;
 
 void Tracking::Run(std::string pathtoData)
 {
@@ -34,10 +40,12 @@ void Tracking::Run(std::string pathtoData)
 
 	//Load Images.
 	localMap = new LocalMap(this);
-	std::vector<std::string> vstrImageFilenames;
-	std::vector<double> vTimestamps;
+	std::vector<std::string> vstrImageFilenames, vstrImageFilenamesD;
+	std::vector<double> vTimestamps, vTimestampsD;
 	std::string strFile=pathtoData+"/rgb.txt";
+	std::string depthFile = pathtoData+"/depth.txt";
 	LoadImages(strFile,vstrImageFilenames,vTimestamps);
+	LoadImages(depthFile, vstrImageFilenamesD, vTimestampsD);
 
 	int nImages=vstrImageFilenames.size();
 	Optimizer::mK = this->mK;
@@ -45,11 +53,13 @@ void Tracking::Run(std::string pathtoData)
 	{
 		InitializeMethod Method = DEPTH;
 		cv::Mat im=cv::imread(pathtoData+"/"+vstrImageFilenames[ni],cv::IMREAD_GRAYSCALE);
+		cv::Mat depthIm = cv::imread(pathtoData+"/"+vstrImageFilenamesD[ni], cv::IMREAD_ANYDEPTH);
 		double tframe=vTimestamps[ni];
 		Frame* fr = new Frame();
 		cv::resize(im, fr->sbiImg, cv::Size(40, 30));
 		cv::GaussianBlur(fr->sbiImg, fr->sbiImg, cv::Size(0, 0), 0.75);
 		fr->image = im;
+		fr->depthImg = depthIm*1./5000;
 		fr->id = ni;
 		fr->timestamp = tframe;
 		lastFrame = currFrame;
@@ -64,28 +74,22 @@ void Tracking::Run(std::string pathtoData)
 				{
 					cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create(500);
 					sift->detect(currFrame->image, currFrame->keypoints);
-					fr->mTcw = (cv::Mat_<double>(4,4) <<
-							0.0366,   0.6212,  -0.7828, 1.3088,
-							0.9983,   0.0132,   0.0571, 0.6183,
-							0.0458,  -0.7836,  -0.6196, 1.6648,
-							0, 0, 0, 1);
-					fr->mTcw = fr->mTcw.inv();
+					fr->mTcw = cv::Mat::ones(4,4,CV_64FC1);
 					FirstFrame = fr;
 				}
 				if (fabs(fr->timestamp-1305031107.91154)<0.001)
 				{
+					cv::Mat_<double> mmK(mK);
 					SecondFrame = fr;
 					cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create(500);
 					sift->detect(currFrame->image, currFrame->keypoints);
-					fr->mTcw = (cv::Mat_<double>(4,4)<<
-													 0.0710,   0.6291,  -0.7741, 1.3144,
-							0.9953,   0.0063,   0.0964, 0.6474,
-							0.0655,   -0.7773,   -0.6257, 1.6570,
-							0, 0, 0, 1);
-					fr->mTcw = fr->mTcw.inv();
+
 					cv::Mat desc1, desc2;
 					sift->compute(FirstFrame->image, FirstFrame->keypoints, desc1);
 					sift->compute(SecondFrame->image, SecondFrame->keypoints, desc2);
+
+					fr->mTcw = getPosByICP(FirstFrame->depthImg, SecondFrame->depthImg, mmK);
+
 					cv::Ptr<cv::FlannBasedMatcher> matcher = cv::FlannBasedMatcher::create();
 					std::vector<cv::DMatch> matches;
 					matcher->match(desc1, desc2, matches);
@@ -96,10 +100,8 @@ void Tracking::Run(std::string pathtoData)
 					}
 					SecondFrame->matchedGroup.insert(std::make_pair(static_cast<KeyFrame*>(FirstFrame), tmpm));
 
-					cv::Mat depth1 = cv::imread(pathtoData+"/depth/1305031107.367183.png", cv::IMREAD_ANYDEPTH);
-					// http://vision.in.tum.de/data/datasets/rgbd-dataset/file_formats
-					depth1.convertTo(depth1, CV_64FC1, 1./5000);
-					cv::Mat_<double> depth(depth1);
+
+					cv::Mat_<double> depth = FirstFrame->depthImg;
 					cv::Mat Twc = fr->mTcw.inv();
 					FirstFrame->mappoints.resize(FirstFrame->keypoints.size());
 					std::fill(FirstFrame->mappoints.begin(), FirstFrame->mappoints.end(), nullptr);
@@ -109,7 +111,6 @@ void Tracking::Run(std::string pathtoData)
 					{
 						MapPoint* mp = new MapPoint;
 						cv::Mat_<double> loc(3,1);
-						cv::Mat_<double> mmK(mK);
 						cv::Point2f pt = FirstFrame->keypoints[matches[i].queryIdx].pt;
 						loc(0) = (pt.x-mmK(0,2))*depth(pt.y, pt.x)/mmK(0,0);
 						loc(1) = (pt.y-mmK(1,2))*depth(pt.y, pt.x)/mmK(1,1);
@@ -685,3 +686,63 @@ bool Tracking::DecideKeyFrame(const Frame* currFrame, int count)
 	return (t1.col(3).hnormalized()-t2.col(3).hnormalized()).squaredNorm()>0.1||count<50;
 }
 
+// depth1:scene depth;depth2:model depth, compute projection from model to scene;
+cv::Mat getPosByICP(cv::Mat_<double> depth1, cv::Mat_<double> depth2, cv::Mat_<double> mK)
+{
+	int pnumScene = cv::countNonZero(depth1);
+	int pnumModel = cv::countNonZero(depth2);
+	cv::Mat_<float> scene = cv::Mat(pnumScene, 3, CV_32FC1);
+	cv::Mat_<float> model = cv::Mat(pnumModel, 3, CV_32FC1);
+	int count = 0;
+	for (int i = 0; i < depth1.rows; i++)
+	{
+		for (int j = 0; j < depth1.cols; j++)
+		{
+			if (depth1(i, j) == 0)
+			{
+				continue;
+			}
+			scene(count, 0) = (j - mK(0, 2)) * depth1(i, j) / mK(0, 0);
+			scene(count, 1) = (i - mK(1, 2)) * depth1(i, j) / mK(1, 1);
+			scene(count, 2) = depth1(i, j);
+			count++;
+		}
+	}
+
+	count = 0;
+	for (int i = 0; i < depth2.rows; i++)
+	{
+		for (int j = 0; j < depth2.cols; j++)
+		{
+			if (depth2(i, j) == 0)
+			{
+				scene(count, 0) = (j - mK(0, 2)) * depth2(i, j) / mK(0, 0);
+				scene(count, 1) = (i - mK(1, 2)) * depth2(i, j) / mK(1, 1);
+				scene(count, 2) = depth2(i, j);
+				count++;
+			}
+		}
+	}
+
+	cv::Mat_<float> sceneNor(pnumScene, 6, CV_32FC1);
+	cv::Mat_<float> modelNor(pnumModel, 6, CV_32FC1);
+	cv::ppf_match_3d::computeNormalsPC3d(scene, sceneNor, 8, false, nullptr);
+	cv::ppf_match_3d::computeNormalsPC3d(model, modelNor, 8, false, nullptr);
+	int min = pnumModel > pnumScene ? pnumScene : pnumModel;
+	sceneNor = sceneNor.rowRange(0, min);
+	modelNor = modelNor.rowRange(0, min);
+	std::cout << modelNor << "\n";
+	std::cout << sceneNor << "\n";
+	cv::ppf_match_3d::ICP icpAlg;
+	double error;
+	double pose[16];
+	for (int i = 0; i < 16; i++)
+	{
+		pose[i] = 0;
+	}
+	pose[0] = pose[5] = pose[10] = pose[15] = 1;
+	icpAlg.registerModelToScene(modelNor, sceneNor, error, pose);
+	std::cout<<"ICP error in initialization:"<<error<<"\n";
+	cv::Mat result(4, 4, CV_64FC1, pose);
+	return result;
+}
