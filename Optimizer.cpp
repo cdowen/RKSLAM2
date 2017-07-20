@@ -7,6 +7,7 @@
 #include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
+#include <sophus/se3.h>
 #include "Optimizer.h"
 #include "Frame.h"
 #include "KeyFrame.h"
@@ -182,7 +183,7 @@ Eigen::Matrix3d Optimizer::ComputeHGlobalKF(KeyFrame *kf, Frame *fr2)
 }
 
 // v[0-2]:t;v[3-6]:x,y,z,w
-Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
+Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr, std::ofstream& csvlog)
 {
 	typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;
 	Block::LinearSolverType* linearSolver = new g2o::LinearSolverCSparse<Block::PoseMatrixType>();
@@ -223,6 +224,7 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 	optimizer.addParameter ( camera );
 
 	// edges
+	std::vector<g2o::EdgeProjectXYZ2UV*> edge_vec;
 	index = 1;
 	for ( int i = 0;i<fr->keypoints.size();i++)
 	{
@@ -237,13 +239,82 @@ Optimizer::Vector7d Optimizer::PoseEstimation(Frame* fr)
 		edge->setMeasurement ( Eigen::Vector2d ( fr->keypoints[i].pt.x, fr->keypoints[i].pt.y ) );
 		edge->setParameterId ( 0,0 );
 		edge->setInformation ( Eigen::Matrix2d::Identity() );
+		edge_vec.push_back(edge);
 		optimizer.addEdge ( edge );
 		index++;
 	}
-
-	optimizer.setVerbose ( true );
 	optimizer.initializeOptimization();
 	optimizer.optimize(10);
+	for (int i = 0;i<4;i++)
+	{
+		optimizer.setVerbose ( true );
+		std::vector<double> errors;
+		for (int i = 0;i<edge_vec.size();i++)
+		{
+			errors.push_back(edge_vec[i]->chi2());
+		}
+		for (auto edge:edge_vec)
+		{
+			if (edge->chi2()>6.991)
+			{
+				edge->setLevel(1);
+			}
+			else
+			{
+				edge->setLevel(0);
+			}
+			if (i==2)
+			{
+				edge->setRobustKernel(nullptr);
+			}
+		}
+		optimizer.initializeOptimization(0);
+		optimizer.optimize(10);
+	}
+
 	std::cout<<"T="<<std::endl<<Eigen::Isometry3d ( pose->estimate() ).matrix() <<std::endl;
+	csvlog<<optimizer.chi2()/optimizer.edges().size()<<"\n";
 	return pose->estimate().toVector();
+}
+
+Sophus::SE3 Optimizer::PoseEstimationPnP(Frame* currFrame, std::ofstream& csvlog)
+{
+	using namespace std;
+	using namespace cv;
+	// construct the 3d 2d observations
+	std::vector<cv::Point3f> pts3d;
+	std::vector<cv::Point2f> pts2d;
+
+	for (int i = 0;i<currFrame->keypoints.size();i++)
+	{
+		if (currFrame->mappoints[i] == nullptr)
+		{
+			continue;
+		}
+		pts2d.push_back(currFrame->keypoints[i].pt);
+		cv::Point3f pt;
+		pt.x = currFrame->mappoints[i]->Tw(0);
+		pt.y = currFrame->mappoints[i]->Tw(1);
+		pt.z = currFrame->mappoints[i]->Tw(2);
+		pts3d.push_back(pt);
+	}
+	if (pts3d.size()<5)
+	{
+		std::cout<<"not enough 3d points"<<"\n";
+		return Sophus::SE3();
+	}
+
+	Mat K = Optimizer::mK;
+	Mat rvec, tvec, inliers;
+	cv::solvePnPRansac ( pts3d, pts2d, K, Mat(), rvec, tvec, false, 100, 4.0, 0.99, inliers );
+	int num_inliers_ = inliers.rows;
+	cout<<"pnp inliers: "<<num_inliers_<<endl;
+	csvlog<<pts3d.size()<<","<<num_inliers_<<"\n";
+	Sophus::SE3 T_c_w_estimated_ = Sophus::SE3 (
+			Sophus::SO3 ( rvec.at<double> ( 0,0 ), rvec.at<double> ( 1,0 ), rvec.at<double> ( 2,0 ) ),
+			Eigen::Vector3d ( tvec.at<double> ( 0,0 ), tvec.at<double> ( 1,0 ), tvec.at<double> ( 2,0 ) )
+	);
+
+	cout<<"T_c_w_estimated_: "<<endl<<T_c_w_estimated_.matrix()<<endl;
+	return T_c_w_estimated_;
 }

@@ -8,16 +8,23 @@ find_package(OpenCV 3 REQUIRED)
 find_package(G2O REQUIRED)
 find_package(Eigen3 3.2.10 REQUIRED)
 find_package (Threads)
+find_package(PCL 1.3 REQUIRED)
 find_package(vikit_common REQUIRED)
-message(STATUS "EIGEN3VERSION = ${EIGEN3_VERSION}")
-include_directories(${OpenCV_INCLUDE_DIRS} 
+find_package(Sophus REQUIRED)
+message(STATUS "OpenCV_VERSION = ${OpenCV_VERSION}")
+list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
+
+include_directories(${OpenCV_INCLUDE_DIRS}
 ${G2O_INCLUDE_DIRS}
 ${EIGEN3_INCLUDE_DIR}
 ${CSPARSE_INCLUDE_DIR}
 ${vikit_common_INCLUDE_DIR}
+${PCL_INCLUDE_DIRS}
+${Sophus_INCLUDE_DIR}
 )
-
-add_executable(rkslam2 
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+add_executable(rkslam2
 main.cpp
 tracking.cpp
 sl3vertex.cpp
@@ -41,6 +48,8 @@ target_link_libraries(rkslam2
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${CMAKE_THREAD_LIBS_INIT}
         ${vikit_common_LIBRARIES}
+        ${PCL_LIBRARIES}
+        ${Sophus_LIBRARIES}
 )
 elseif(CMAKE_BUILD_TYPE EQUAL "RELEASE")
 target_link_libraries(rkslam2
@@ -54,6 +63,8 @@ target_link_libraries(rkslam2
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${CMAKE_THREAD_LIBS_INIT}
         ${vikit_common_LIBRARIES}
+        ${PCL_LIBRARIES}
+        ${Sophus_LIBRARIES}
 )
 elseif (WIN32)
 target_link_libraries(rkslam2
@@ -66,6 +77,8 @@ target_link_libraries(rkslam2
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${G2O_TYPES_SBA}
         ${vikit_common_LIBRARIES}
+        ${PCL_LIBRARIES}
+        ${Sophus_LIBRARIES}
 )
 else()
 target_link_libraries(rkslam2
@@ -79,5 +92,7 @@ target_link_libraries(rkslam2
         ${G2O_SOLVER_CSPARSE_EXTENSION}
         ${CMAKE_THREAD_LIBS_INIT}
         ${vikit_common_LIBRARIES}
+        ${PCL_LIBRARIES}
+        ${Sophus_LIBRARIES}
 )
 endif()

@@ -4,16 +4,19 @@
 #include "Frame.h"
 #include "KeyFrame.h"
 #include <Eigen/Core>
-#define USE_SIFT
+//#define USE_SIFT
 class Matcher{
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	Matcher(){};
+	Matcher(){orb_ = cv::ORB::create(1000, 1.2, 4);};
 	std::map<int ,int > SearchForInitialization( Frame* fr1, Frame* fr2);
 	int SearchMatchByGlobal(Frame *fr1, std::map<KeyFrame *, Eigen::Matrix3d> globalH);
 	int SearchMatchByLocal(Frame* currFrame, std::vector<KeyFrame*> kfs);
+	int SearchMatchBySIFT(Frame* fr1, std::vector<KeyFrame*> kfs);
+	std::map<int,int> matchBySift(Frame* fr1, Frame* fr2);
 	std::map<int,int> matchByH(Frame* fr1, Frame* fr2, Eigen::Matrix3d& H);
 	int MatchByLocalH(Frame *currFrame, KeyFrame *kfs);
+	cv::Ptr<cv::ORB> orb_;  // orb detector and computer
 
 private:
   	int SSDcompute(Frame* fr1, Frame*fr2, cv::KeyPoint kp1, cv::KeyPoint kp2);

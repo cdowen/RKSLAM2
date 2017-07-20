@@ -33,14 +33,14 @@ private:
 					std::vector<double> &vTimestamps);
 	//For Initialization
 	Initialization* Initializer;
-	Frame* FirstFrame;
-	Frame* SecondFrame;
+	Frame* FirstFrame = nullptr;
+	Frame* SecondFrame = nullptr;
 	int PyramidLevel=5;
 	const int cell_size=30;
 	int ShiTScore_Threshold=20;
 	//Initialize with VINS-mono.
 	std::vector<Frame*>VINS_FramesInWindow;
-	std::ofstream logfile;
+	std::ofstream logfile, csvlog;
 	const int minimalKeyFrameInterval = 5;
 };
 #endif

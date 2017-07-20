@@ -89,6 +89,51 @@ int Matcher::SearchMatchByGlobal(Frame *fr1, std::map<KeyFrame *, Eigen::Matrix3
 	return count;
 }
 
+
+int Matcher::SearchMatchBySIFT(Frame* fr1, std::vector<KeyFrame*> kfs)
+{
+	int count = 0;
+	for (KeyFrame* kf:kfs)
+	{
+		auto tmpd = matchBySift(fr1, kf);
+		fr1->matchedGroup.insert(std::make_pair(kf, tmpd));
+		count+=tmpd.size();
+	}
+	return count;
+}
+// Find corresponding feature with sift, fr1 owns the first items in returned map.
+std::map<int,int> Matcher::matchBySift(Frame* fr1, Frame* fr2)
+{
+	//cv::Ptr<cv::xfeatures2d::SiftDescriptorExtractor> sift = cv::xfeatures2d::SiftDescriptorExtractor::create();
+	cv::Mat desc1, desc2;
+	orb_->compute(fr1->image, fr1->keypoints, desc1);
+	orb_->compute(fr2->image, fr2->keypoints, desc2);
+	cv::FlannBasedMatcher matcher(new cv::flann::LshIndexParams(5,10,2));
+	//cv::BFMatcher matcher;
+	std::vector<cv::DMatch> matches, good_matches;
+	std::cout<<desc1.type()<<"\n";
+	matcher.match(desc1, desc2, matches);
+	float min_dis = std::min_element (
+			matches.begin(), matches.end(),
+			[] ( const cv::DMatch& m1, const cv::DMatch& m2 )
+			{
+				return m1.distance < m2.distance;
+			} )->distance;
+	for (cv::DMatch& m:matches)
+	{
+		if ( m.distance < std::max<float> ( min_dis*2.0, 30.0 ) )
+		{
+			good_matches.push_back(m);
+		}
+	}
+
+	std::map<int, int> ret;
+	for (cv::DMatch& m:good_matches)
+	{
+		ret.insert(std::make_pair(m.queryIdx, m.trainIdx));
+	}
+	return ret;
+}
 // Find corresponding feature points in two frames with homography
 // fr1 represent keyframe to project.
 // TODO: different search range for well and ill conditioned points
